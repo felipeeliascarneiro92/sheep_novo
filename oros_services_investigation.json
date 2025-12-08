@@ -1,0 +1,16 @@
+{
+  "clientId": "2726",
+  "totalRecords": 17,
+  "uniqueServices": 1,
+  "serviceIds": [
+    null
+  ],
+  "sampleRecord": {
+    "id": "64510",
+    "id_cliente": "2726",
+    "id_tipo_servico": "6",
+    "valor": "95,00",
+    "valor_fornecedor": "\\N"
+  },
+  "foundInServicosCSV": false
+}

@@ -1,0 +1,16 @@
+{
+  "13": {
+    "PIX": 2647,
+    "BOLETO": 3969,
+    "CREDIT_CARD": 104,
+    "UNDEFINED": 105,
+    "CARTÃO CREDITO": 1
+  },
+  "16": {
+    "BOLETO": 498,
+    "PIX": 2425,
+    "CREDIT_CARD": 257,
+    "UNDEFINED": 194,
+    "DEBIT_CARD": 1
+  }
+}

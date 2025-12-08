@@ -1,0 +1,110 @@
+
+export * from './clientService';
+export * from './photographerService';
+export * from './resourceService';
+export * from './financeService';
+export * from './taskService';
+export * from './authService';
+export * from './auditService';
+export * from './scheduleService';
+export * from './asaasService';
+export * from './notificationService';
+export * from './storageService'; // New export
+
+import { getBookingById, bookingToDb } from './scheduleService';
+import { supabase } from './supabase';
+import { HistoryActor } from '../types';
+import { createBookingFolder } from './storageService';
+import { notifyClientBookingRescheduled, notifyClientBookingCancelled, notifyClientBookingCompleted } from './notificationService';
+import { getClientById } from './clientService';
+
+export const updateBookingObservations = async (id: string, newObservations: string, actor: HistoryActor) => {
+    const booking = await getBookingById(id);
+    if (booking) {
+        const oldObs = booking.unit_details || '';
+        booking.unit_details = newObservations;
+
+        // Only log if changed
+        if (oldObs !== newObservations) {
+            booking.history.push({
+                timestamp: new Date().toISOString(),
+                actor: actor,
+                notes: 'Observações/Detalhes do imóvel atualizados'
+            });
+            await supabase.from('bookings').update(bookingToDb(booking)).eq('id', id);
+        }
+
+        // NOTIFICATION: WhatsApp to Client (Reschedule)
+        const client = await getClientById(booking.client_id);
+        if (client && client.phone) {
+            notifyClientBookingRescheduled(booking, client.name, client.phone);
+        }
+
+        return booking;
+    }
+    return null;
+};
+
+export const linkBookingToDropbox = async (bookingId: string, actor: HistoryActor) => {
+    const booking = await getBookingById(bookingId);
+    if (booking && !booking.dropboxFolderId) {
+        try {
+            const { folderId, webViewLink, uploadLink } = await createBookingFolder(booking);
+            booking.dropboxFolderId = folderId;
+            booking.dropboxFolderLink = webViewLink; // Shared Link (View)
+            booking.dropboxUploadLink = uploadLink; // File Request (Upload)
+
+            booking.history.push({
+                timestamp: new Date().toISOString(),
+                actor: actor,
+                notes: 'Pasta de arquivos criada'
+            });
+            await supabase.from('bookings').update(bookingToDb(booking)).eq('id', bookingId);
+            return booking;
+        } catch (error) {
+            console.error("Failed to create Dropbox folder", error);
+            return null;
+        }
+    }
+    return booking;
+};
+
+// Updated to ASYNC to handle Drive creation
+export const completeBooking = async (id: string, internalNotes: string, commonAreaId?: string) => {
+    const booking = await getBookingById(id);
+    if (booking) {
+        booking.status = 'Realizado';
+        booking.internalNotes = internalNotes; // Save to internalNotes
+        if (commonAreaId) booking.commonAreaId = commonAreaId;
+
+        booking.history.push({ timestamp: new Date().toISOString(), actor: 'Fotógrafo', notes: 'Sessão realizada' });
+
+        // AUTOMATION: Create Drive Folder
+        try {
+            console.log("Auto-creating Dropbox folder for booking", id);
+            const { folderId, webViewLink, uploadLink } = await createBookingFolder(booking);
+
+            booking.dropboxFolderId = folderId;
+            booking.dropboxFolderLink = webViewLink;
+            booking.dropboxUploadLink = uploadLink;
+            booking.history.push({ timestamp: new Date().toISOString(), actor: 'Sistema', notes: 'Pasta de arquivos criada automaticamente' });
+        } catch (e) {
+            console.error("Erro ao criar pasta automática no Dropbox", e);
+            // We don't stop the completion flow if drive fails, just log it
+        }
+
+        await supabase.from('bookings').update(bookingToDb(booking)).eq('id', id);
+
+
+    }
+    return booking!;
+};
+
+// ... exports below remain unchanged, re-exporting them to ensure file integrity
+export {
+    uploadMaterialForBooking, deliverAndCompleteBooking, addTipToBooking,
+    updateKeyStatus, reassignBooking, getContextualUpsells, getBookingDuration,
+    generateMarketingDescription, updateBookingFull
+} from './scheduleService';
+
+export { uploadCreativeStudioFile } from './resourceService';

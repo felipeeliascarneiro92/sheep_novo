@@ -1,0 +1,27 @@
+{
+  "id": "8c364831-b2b7-418b-b2fc-948a9be38bf6",
+  "legacy_id": "2742",
+  "name": "InCasa Negócios Imobiliários Ltda",
+  "trade_name": "InCasa Negócios Imobiliários Ltda",
+  "person_type": "Jurídica",
+  "cpf": null,
+  "cnpj": "29.605.061/0001-64",
+  "payment_method": "Pix",
+  "payment_type": "Pré-pago",
+  "due_day": null,
+  "asaas_customer_id": "cus_000150688552",
+  "address": {
+    "zip": "82970-190",
+    "city": "Curitiba",
+    "state": "PR",
+    "number": "",
+    "street": "R Olivo Carnasciali",
+    "reference": "",
+    "complement": "",
+    "observation": "",
+    "neighborhood": ""
+  },
+  "phone": "(41) 99999-2950",
+  "mobile_phone": "(41) 99999-2950",
+  "email": "Marie.nicolardot@hotmail.com"
+}

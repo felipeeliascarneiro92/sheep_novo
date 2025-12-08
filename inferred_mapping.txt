@@ -1,0 +1,102 @@
+{
+  "6": {
+    "count": 40223,
+    "likelyName": "Fotografia Profissional"
+  },
+  "7": {
+    "count": 8896,
+    "likelyName": "Unknown"
+  },
+  "8": {
+    "count": 1517,
+    "likelyName": "Unknown"
+  },
+  "9": {
+    "count": 4370,
+    "likelyName": "Unknown"
+  },
+  "10": {
+    "count": 4275,
+    "likelyName": "Fotografia Profissional,Retirar Chaves na Imobiliária"
+  },
+  "11": {
+    "count": 168,
+    "likelyName": "Unknown"
+  },
+  "12": {
+    "count": 973,
+    "likelyName": "Unknown"
+  },
+  "13": {
+    "count": 221,
+    "likelyName": "Unknown"
+  },
+  "14": {
+    "count": 553,
+    "likelyName": "Unknown"
+  },
+  "15": {
+    "count": 973,
+    "likelyName": "Unknown"
+  },
+  "16": {
+    "count": 456,
+    "likelyName": "Unknown"
+  },
+  "17": {
+    "count": 31,
+    "likelyName": "Unknown"
+  },
+  "19": {
+    "count": 198,
+    "likelyName": "Unknown"
+  },
+  "20": {
+    "count": 46,
+    "likelyName": "Unknown"
+  },
+  "21": {
+    "count": 610,
+    "likelyName": "Unknown"
+  },
+  "22": {
+    "count": 1206,
+    "likelyName": "Unknown"
+  },
+  "23": {
+    "count": 9,
+    "likelyName": "Unknown"
+  },
+  "24": {
+    "count": 705,
+    "likelyName": "Unknown"
+  },
+  "25": {
+    "count": 383,
+    "likelyName": "Unknown"
+  },
+  "26": {
+    "count": 75,
+    "likelyName": "Unknown"
+  },
+  "27": {
+    "count": 9,
+    "likelyName": "Unknown"
+  },
+  "29": {
+    "count": 61,
+    "likelyName": "Unknown"
+  },
+  "30": {
+    "count": 20,
+    "likelyName": "Unknown"
+  },
+  "31": {
+    "count": 6,
+    "likelyName": "Unknown"
+  },
+  "32": {
+    "count": 2,
+    "likelyName": "Unknown"
+  }
+}

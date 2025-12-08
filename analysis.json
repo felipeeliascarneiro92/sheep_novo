@@ -1,0 +1,40 @@
+{
+  "totalClients": 2455,
+  "clientsWithAsaas": 2377,
+  "exampleAsaasClient": {
+    "id": "26",
+    "id_grupo": "38",
+    "id_cliente_tipo_pessoa": "1",
+    "id_rede": "\\N",
+    "nome": "Francisco José Teixeira Filho",
+    "nome_fantasia": "",
+    "cpf_cnpj": "054.860.829-67",
+    "inscricao_estadual": "",
+    "id_endereco": "4031",
+    "id_endereco_cobranca": "4032",
+    "data_nascimento": "1981-10-29",
+    "id_cliente_estado_civil": "4",
+    "sexo": "M",
+    "dia_vencimento": "12",
+    "id_forma_pagamento": "16",
+    "rg": "224234234",
+    "status": "1",
+    "foto": "\\N",
+    "data_hora_cadastro": "2023-03-23 23:34:45",
+    "observacao_dados": "daweqeqwe",
+    "excluido": "\\N",
+    "id_usuario_atualizacao": "1",
+    "data_hora_atualizacao": "2023-04-01 16:43:47",
+    "id_asaas": "cus_000055370241",
+    "saldo": "0,00"
+  },
+  "uniquePaymentMethods": [
+    "13",
+    "1",
+    "16",
+    "15"
+  ],
+  "cpfCount": 27,
+  "cnpjCount": 73,
+  "otherCount": 0
+}

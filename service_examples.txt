@@ -1,0 +1,10 @@
+{
+  "Chaves": {
+    "serviceName": "Fotografia Profissional,Retirar Chaves na Imobiliária",
+    "bookingId": "47430",
+    "itemTypes": [
+      "6",
+      "10"
+    ]
+  }
+}

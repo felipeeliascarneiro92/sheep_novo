@@ -312,6 +312,13 @@ export const addFunds = async (clientId: string, amount: number, type: 'Credit' 
         };
         const { error } = await supabase.from('transactions').insert([transaction]);
         if (error) console.error('Error adding transaction:', error);
+
+        // 📧 Email Notification (Only for Credits/Deposits)
+        if (type === 'Credit') {
+            import('./emailService').then(({ sendCreditPurchaseConfirmation }) => {
+                sendCreditPurchaseConfirmation(client, amount, newBalance).catch(console.error);
+            });
+        }
     }
 };
 

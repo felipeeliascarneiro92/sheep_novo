@@ -1,4 +1,4 @@
-import { notifyClientBookingCreated, notifyClientBookingCancelled, notifyClientBookingCompleted, notifyPhotographerNewBooking, notifyPhotographerBookingCancelled } from './notificationService';
+import { notifyClientBookingCreated, notifyClientBookingCancelled, notifyClientBookingCompleted, notifyPhotographerNewBooking, notifyPhotographerBookingCancelled, notifyClientBookingRescheduled } from './notificationService';
 import { supabase } from './supabase';
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 import { Booking, BookingStatus, EligiblePhotographer, Photographer, Service, HistoryActor, OptimizationSuggestion, Client, Broker } from '../types';
@@ -1001,10 +1001,27 @@ export const updateBookingFull = async (id: string, updates: Partial<Booking>, a
 export const rescheduleBooking = async (id: string, newDate: string, newTime: string) => {
     const booking = await getBookingById(id);
     if (booking) {
+        const oldDate = booking.date || '';
+        const oldTime = booking.start_time || '';
+
         booking.date = newDate;
         booking.start_time = newTime;
         booking.history.push({ timestamp: new Date().toISOString(), actor: 'Sistema', notes: `Reagendado para ${newDate} às ${newTime}` });
         await supabase.from('bookings').update(bookingToDb(booking)).eq('id', id);
+
+        // 📧 Send Reschedule Email
+        const client = await getClientById(booking.client_id);
+        if (client) {
+            import('./emailService').then(({ sendBookingReschedule }) => {
+                console.log('📧 Sending reschedule email...');
+                sendBookingReschedule(booking, client, oldDate, oldTime).catch(err => console.error('❌ Failed to send reschedule email:', err));
+            });
+
+            // 📱 WhatsApp Notification
+            if (client.phone) {
+                notifyClientBookingRescheduled(booking, client.name, client.phone);
+            }
+        }
     }
 };
 

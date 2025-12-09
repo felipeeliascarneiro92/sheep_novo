@@ -89,6 +89,11 @@ export const createManualInvoice = async (clientId: string, amount: number, dueD
         asaasPaymentId: `pay_manual_${uuidv4().slice(0, 8)}`
     };
     await supabase.from('invoices').insert([invoice]);
+
+    // 📧 Email Receipt
+    import('./emailService').then(({ sendNewInvoice }) => {
+        sendNewInvoice(client, '', amount, dueDate, description).catch(console.error);
+    });
 };
 
 export const saveAsaasInvoice = async (clientId: string, charge: { id: string, invoiceUrl: string, value: number, dueDate: string, description: string }) => {
@@ -112,6 +117,11 @@ export const saveAsaasInvoice = async (clientId: string, charge: { id: string, i
     const { error } = await supabase.from('invoices').insert([invoicePayload]);
     if (error) {
         console.error("Error saving invoice to DB:", error);
+    } else {
+        // 📧 Email Receipt
+        import('./emailService').then(({ sendNewInvoice }) => {
+            sendNewInvoice(client, charge.invoiceUrl, charge.value, charge.dueDate, charge.description).catch(console.error);
+        });
     }
 };
 
@@ -262,6 +272,11 @@ export const generateMonthlyInvoices = async (): Promise<AdminInvoice[]> => {
                 `Fatura mensal gerada para ${client.name}: R$ ${totalAmount.toFixed(2)} (${billableBookings.length} serviços)`,
                 { invoiceId: newInvoice.id }
             );
+
+            // 📧 Email Receipt
+            import('./emailService').then(({ sendNewInvoice }) => {
+                sendNewInvoice(client, newInvoice.asaasInvoiceUrl || '', totalAmount, dueDateStr, `Fatura Mensal - ${monthLabel}`).catch(console.error);
+            });
         }
     }
 
@@ -357,6 +372,14 @@ export const generateInvoiceForClient = async (clientId: string, bookingIds: str
         `Fatura manual gerada para ${client.name}: R$ ${totalAmount.toFixed(2)} (${bookingsToBill.length} itens)`,
         { invoiceId: newInvoice.id }
     );
+
+    // 📧 Email Receipt (Async)
+    import('./emailService').then(({ sendNewInvoice }) => {
+        // Asaas URL might be empty for purely manual invoices if not integrated, 
+        // normally generateInvoiceForClient logic should probably integrate Asaas too, 
+        // but sticking to existing logic, we send what we have.
+        sendNewInvoice(client, '', totalAmount, finalDueDate, `Faturamento Avulso - ${monthLabel}`).catch(console.error);
+    });
 
     return newInvoice;
 };

@@ -1,6 +1,5 @@
-
 import { supabase } from './supabase';
-import { User } from '../App';
+import type { User } from '../App';
 
 // --- AUTH HELPER ---
 export const authenticateUser = async (email: string, password: string): Promise<User | null> => {
@@ -101,28 +100,53 @@ export const authenticateUser = async (email: string, password: string): Promise
     }
 };
 
-export const getUserById = async (id: string): Promise<User | null> => {
-    // Try to find user in all tables by ID
+// --- GET USER BY ID (for impersonation) ---
+export const getUserById = async (userId: string): Promise<User | null> => {
+    try {
+        console.log('🔍 [authService] Buscando usuário por ID:', userId);
 
-    // Admin
-    const { data: admin } = await supabase.from('admins').select('*').eq('id', id).maybeSingle();
-    if (admin) return { role: 'admin', id: admin.id, name: admin.name, profilePicUrl: admin.profile_pic_url };
+        // 1. Check Admin
+        const { data: admin } = await supabase.from('admins').select('*').eq('id', userId).maybeSingle();
+        if (admin) {
+            return { role: 'admin', id: admin.id, name: admin.name, profilePicUrl: admin.profile_pic_url };
+        }
 
-    // Client
-    const { data: client } = await supabase.from('clients').select('*').eq('id', id).maybeSingle();
-    if (client) return { role: 'client', id: client.id, name: client.name, profilePicUrl: client.profile_pic_url || undefined };
+        // 2. Check Editor
+        const { data: editor } = await supabase.from('editors').select('*').eq('id', userId).maybeSingle();
+        if (editor) {
+            return { role: 'editor', id: editor.id, name: editor.name, profilePicUrl: editor.profile_pic_url };
+        }
 
-    // Photographer
-    const { data: photographer } = await supabase.from('photographers').select('*').eq('id', id).maybeSingle();
-    if (photographer) return { role: 'photographer', id: photographer.id, name: photographer.name, profilePicUrl: photographer.profile_pic_url };
+        // 3. Check Clients
+        const { data: client } = await supabase.from('clients').select('*').eq('id', userId).maybeSingle();
+        if (client) {
+            return { role: 'client', id: client.id, name: client.name, profilePicUrl: client.profile_pic_url || undefined };
+        }
 
-    // Broker
-    const { data: broker } = await supabase.from('brokers').select('*').eq('id', id).maybeSingle();
-    if (broker) return { role: 'broker', id: broker.id, clientId: broker.client_id, name: broker.name, profilePicUrl: broker.profile_pic_url, permissions: broker.permissions };
+        // 4. Check Photographers
+        const { data: photographer } = await supabase.from('photographers').select('*').eq('id', userId).maybeSingle();
+        if (photographer) {
+            return { role: 'photographer', id: photographer.id, name: photographer.name, profilePicUrl: photographer.profile_pic_url };
+        }
 
-    // Editor
-    const { data: editor } = await supabase.from('editors').select('*').eq('id', id).maybeSingle();
-    if (editor) return { role: 'editor', id: editor.id, name: editor.name, profilePicUrl: editor.profile_pic_url };
+        // 5. Check Brokers
+        const { data: broker } = await supabase.from('brokers').select('*').eq('id', userId).maybeSingle();
+        if (broker) {
+            return {
+                role: 'broker',
+                id: broker.id,
+                clientId: broker.client_id,
+                name: broker.name,
+                profilePicUrl: broker.profile_pic_url,
+                permissions: broker.permissions
+            };
+        }
 
-    return null;
+        console.warn('⚠️ [authService] Usuário não encontrado com ID:', userId);
+        return null;
+    } catch (error) {
+        console.error("❌ [authService] Erro ao buscar usuário:", error);
+        return null;
+    }
 };
+

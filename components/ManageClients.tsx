@@ -566,6 +566,30 @@ const ClientProfilePage: React.FC<{ client: Client; onBack: () => void; onSave: 
         return { totalSpent, totalBookings, averageTicket, lastBookingDate };
     }, [clientBookings]);
 
+    const handleSendPasswordReset = async () => {
+        if (!confirm(`Enviar email de redefinição de senha para ${client.email}?`)) {
+            return;
+        }
+
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(client.email, {
+                redirectTo: `${window.location.origin}/reset-password`,
+            });
+
+            if (error) {
+                console.error('❌ Erro ao enviar email:', error);
+                alert(`Erro: ${error.message}`);
+                return;
+            }
+
+            console.log('✅ Email de redefinição enviado para:', client.email);
+            alert(`Email de redefinição de senha enviado para ${client.email}!`);
+        } catch (error) {
+            console.error('❌ Erro inesperado:', error);
+            alert('Erro ao enviar email. Tente novamente.');
+        }
+    };
+
     const handleConfirmConversion = (targetAgencyId: string) => {
         convertClientToBroker(client.id, targetAgencyId);
         alert(`Cliente ${client.name} convertido para corretor com sucesso! O perfil de cliente foi desativado.`);
@@ -637,6 +661,7 @@ const ClientProfilePage: React.FC<{ client: Client; onBack: () => void; onSave: 
                 <div className="flex items-center gap-2 flex-wrap">
                     <button onClick={() => setView('pricing')} className={`font-semibold text-sm py-2 px-4 border rounded-lg flex items-center gap-2 ${view === 'pricing' ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300' : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600'}`}><DollarSignIcon className="w-4 h-4" />Tabela de Preços</button>
                     <button onClick={() => setView('blocked')} className={`font-semibold text-sm py-2 px-4 border rounded-lg flex items-center gap-2 ${view === 'blocked' ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300' : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600'}`}><UserXIcon className="w-4 h-4" />Bloqueios</button>
+                    <button onClick={handleSendPasswordReset} className="font-semibold text-sm bg-indigo-600 dark:bg-indigo-700 text-white py-2 px-4 border border-transparent rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 flex items-center gap-2"><MailIcon className="w-4 h-4" />Redefinir Senha</button>
                     <button onClick={() => setIsConvertingClient(true)} className="font-semibold text-sm bg-white dark:bg-slate-700 dark:text-slate-200 py-2 px-4 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center gap-2"><UserCheckIcon className="w-4 h-4" />Converter p/ Corretor</button>
                     <button onClick={onEdit} className="font-semibold text-sm bg-white dark:bg-slate-700 dark:text-slate-200 py-2 px-4 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center gap-2"><EditIcon className="w-4 h-4" />Editar</button>
                     <button onClick={() => setIsHistoryModalOpen(true)} className="font-semibold text-sm bg-white dark:bg-slate-700 dark:text-slate-200 py-2 px-4 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center gap-2"><HistoryIcon className="w-4 h-4" />Histórico</button>

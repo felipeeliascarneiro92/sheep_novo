@@ -422,36 +422,40 @@ const ClientProfilePage: React.FC<ClientProfilePageProps> = ({ user }) => {
                         {activeTab === 'security' && (
                             <div className="space-y-6 animate-fade-in">
                                 <h3 className="text-lg font-bold text-slate-800 border-b pb-2 mb-4">Segurança da Conta</h3>
-                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800 mb-6">
-                                    <p>Para sua segurança, escolha uma senha forte com pelo menos 6 caracteres.</p>
-                                </div>
-                                <div className="max-w-md space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Nova Senha</label>
-                                        <div className="relative">
-                                            <LockIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                type="password"
-                                                name="password"
-                                                value={formData.password}
-                                                onChange={handleInputChange}
-                                                className="w-full pl-9 p-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                                placeholder="••••••••"
-                                            />
+
+                                {/* Password Reset via Email Button */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div className="flex items-start gap-3">
+                                        <div className="bg-blue-100 p-2 rounded-full flex-shrink-0">
+                                            <MailIcon className="w-5 h-5 text-blue-600" />
                                         </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Confirmar Nova Senha</label>
-                                        <div className="relative">
-                                            <LockIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <input
-                                                type="password"
-                                                name="confirmPassword"
-                                                value={formData.confirmPassword}
-                                                onChange={handleInputChange}
-                                                className="w-full pl-9 p-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                                placeholder="••••••••"
-                                            />
+                                        <div className="flex-1">
+                                            <h4 className="font-bold text-slate-800 mb-1">Redefinir Senha</h4>
+                                            <p className="text-sm text-slate-600 mb-3">
+                                                Clique no botão abaixo para receber um link seguro no seu email. Você poderá criar uma nova senha de forma segura.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    if (!client) return;
+                                                    try {
+                                                        const { error } = await supabase.auth.resetPasswordForEmail(client.email, {
+                                                            redirectTo: `${window.location.origin}/reset-password`,
+                                                        });
+                                                        if (error) {
+                                                            setMessage({ type: 'error', text: `Erro: ${error.message}` });
+                                                        } else {
+                                                            setMessage({ type: 'success', text: `Email de redefinição enviado para ${client.email}!` });
+                                                        }
+                                                    } catch (error) {
+                                                        setMessage({ type: 'error', text: 'Erro ao enviar email.' });
+                                                    }
+                                                }}
+                                                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all flex items-center gap-2 text-sm"
+                                            >
+                                                <MailIcon className="w-4 h-4" />
+                                                Enviar Link de Redefinição
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

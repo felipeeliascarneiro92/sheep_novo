@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../App';
-import { authenticateUser, getUserById } from '../services/bookingService';
+import { authenticateUser, getUserById } from '../services/authService';
 import { supabase } from '../services/supabase';
 
 

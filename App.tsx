@@ -43,6 +43,7 @@ import CrmDashboardPage from './components/CrmDashboardPage';
 import EditorPayrollPage from './components/EditorPayrollPage';
 import ChatPage from './components/ChatPage';
 import ModernAuthScreen from './components/ModernAuthScreen';
+import ResetPasswordPage from './components/ResetPasswordPage';
 
 
 // Icons
@@ -739,6 +740,11 @@ const MainContent: React.FC = () => {
     // PUBLIC ROUTE: Client Finish Booking
     if (publicBookingId) {
         return <ClientFinishBookingPage bookingId={publicBookingId} />;
+    }
+
+    // PUBLIC ROUTE: Reset Password
+    if (window.location.hash.includes('type=recovery')) {
+        return <ResetPasswordPage />;
     }
 
     if (!user) {

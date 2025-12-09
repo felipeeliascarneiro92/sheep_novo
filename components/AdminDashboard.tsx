@@ -4,6 +4,7 @@ import { Booking, BookingStatus, OptimizationSuggestion, Photographer, Service, 
 import { DollarSignIcon, ListOrderedIcon, UsersIcon, CameraIcon, MapPinIcon, SearchIcon, CheckCircleIcon, ClockIcon, CalendarIcon, XCircleIcon, TrendingUpIcon, TrendingDownIcon, FilterIcon } from './icons';
 import RouteOptimizerWidget from './RouteOptimizerWidget';
 import RecentFailuresWidget from './RecentFailuresWidget';
+import { usePhotographers, useClients, useServices, useBookings } from '../hooks/useQueries';
 
 interface AdminDashboardProps {
     onViewDetails: (bookingId: string) => void;
@@ -140,11 +141,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewDetails }) => {
     const [dateRange, setDateRange] = useState<DateRangeOption>('this_month');
     const [optimizations, setOptimizations] = useState<OptimizationSuggestion[]>([]);
 
-    const [allBookings, setAllBookings] = useState<Booking[]>([]);
-    const [allPhotographers, setAllPhotographers] = useState<Photographer[]>([]);
-    const [allServices, setAllServices] = useState<Service[]>([]);
-    const [allClients, setAllClients] = useState<Client[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    // ✅ OTIMIZAÇÃO: Usar hooks com cache - 4 requests simultâneos viram queries em cache!
+    const { data: allBookings = [], isLoading: loadingBookings } = useBookings();
+    const { data: allPhotographers = [], isLoading: loadingPhotographers } = usePhotographers();
+    const { data: allServices = [], isLoading: loadingServices } = useServices();
+    const { data: allClients = [], isLoading: loadingClients } = useClients();
+
+    // Loading é true apenas se TODOS ainda estão carregando
+    const isLoading = loadingBookings || loadingPhotographers || loadingServices || loadingClients;
 
     const refreshOptimizations = async () => {
         const todayStr = new Date().toISOString().split('T')[0];
@@ -152,28 +156,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onViewDetails }) => {
         setOptimizations(suggestions);
     };
 
+    // Carregar otimizações apenas uma vez no mount
     useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            try {
-                const [bookings, photographers, services, clients] = await Promise.all([
-                    getAllBookings(),
-                    getPhotographers(),
-                    getServices(),
-                    getClients()
-                ]);
-                setAllBookings(bookings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-                setAllPhotographers(photographers);
-                setAllServices(services);
-                setAllClients(clients);
-                await refreshOptimizations();
-            } catch (error) {
-                console.error("Error fetching dashboard data:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchData();
+        refreshOptimizations();
     }, []);
 
     const analytics = useMemo(() => {

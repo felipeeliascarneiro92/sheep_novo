@@ -768,15 +768,18 @@ const MainContent: React.FC = () => {
 
 import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { QueryProvider } from './contexts/QueryProvider';
 
 const App: React.FC = () => {
     return (
         <AuthProvider>
-            <ThemeProvider>
-                <ToastProvider>
-                    <MainContent />
-                </ToastProvider>
-            </ThemeProvider>
+            <QueryProvider>
+                <ThemeProvider>
+                    <ToastProvider>
+                        <MainContent />
+                    </ToastProvider>
+                </ThemeProvider>
+            </QueryProvider>
         </AuthProvider>
     );
 };

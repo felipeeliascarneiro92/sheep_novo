@@ -9,6 +9,7 @@ import { getPhotographers, getServices, addPhotographer, updatePhotographer, upd
 import { Photographer, Service, ServiceCategory, DayOfWeek, PhotographerHistory } from '../types';
 import { CameraIcon, SearchIcon, PhoneIcon, MapPinIcon, RouteIcon, PlusIcon, XIcon, MailIcon, LockIcon, UserIcon, EditIcon, HistoryIcon, DollarSignIcon, ArrowLeftIcon, CheckCircleIcon, XCircleIcon, FileTextIcon, EyeIcon } from './icons';
 import { maskPhone } from '../utils/masks';
+import { usePhotographers, useInvalidatePhotographers } from '../hooks/useQueries';
 
 const serviceCategories: ServiceCategory[] = ['Foto', 'Vídeo', 'Aéreo', 'Pacotes', 'Outros'];
 
@@ -501,26 +502,21 @@ import PhotographerCoverageMap from './PhotographerCoverageMap';
 // --- MAIN COMPONENT ---
 const ManagePhotographers: React.FC = () => {
     const { impersonate } = useAuth();
+
+    // ✅ OTIMIZAÇÃO: Usar hook com cache ao invés de useEffect manual
+    const { data: allPhotographers = [], isLoading, refetch } = usePhotographers();
+    const invalidatePhotographers = useInvalidatePhotographers();
+
     const [view, setView] = useState<'list' | 'prices' | 'map'>('list');
     const [selectedPhotographer, setSelectedPhotographer] = useState<Photographer | null>(null);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [allPhotographers, setAllPhotographers] = useState<Photographer[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        fetchPhotographers();
-    }, []);
-
-    const fetchPhotographers = async () => {
-        setIsLoading(true);
-        const data = await getPhotographers();
-        setAllPhotographers(data);
-        setIsLoading(false);
+    const refreshPhotographers = () => {
+        invalidatePhotographers(); // Invalida o cache para forçar refetch
+        refetch(); // Refetch imediato
     };
-
-    const refreshPhotographers = () => fetchPhotographers();
 
     const [showInactive, setShowInactive] = useState(false);
 
@@ -537,7 +533,7 @@ const ManagePhotographers: React.FC = () => {
         const lowerQuery = searchQuery.toLowerCase();
         return filtered.filter(p =>
             (p.name || '').toLowerCase().includes(lowerQuery) ||
-            (p.base_address || '').toLowerCase().includes(lowerQuery)
+            (p.baseAddress || '').toLowerCase().includes(lowerQuery)
         );
     }, [allPhotographers, searchQuery, showInactive]);
 

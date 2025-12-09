@@ -6,6 +6,7 @@ import { Booking, Photographer } from '../types';
 import { ClockIcon, CheckCircleIcon, DollarSignIcon, XCircleIcon, NavigationIcon, MapPinIcon, WalletIcon } from './icons';
 import { User } from '../App';
 import RecentFailuresWidget from './RecentFailuresWidget';
+import { usePhotographer } from '../hooks/useQueries';
 
 
 
@@ -196,22 +197,26 @@ const PendingUploads: React.FC<{ bookings: Booking[], onViewDetails: (id: string
 
 
 const PhotographerDashboard: React.FC<{ user: User, onViewDetails: (id: string) => void }> = ({ user, onViewDetails }) => {
-    const [photographer, setPhotographer] = useState<Photographer | null>(null);
+    // ✅ OTIMIZAÇÃO: Usar hook com cache ao invés de fetch manual
+    const { data: photographer, isLoading } = usePhotographer(user.id);
+
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [timeOffs, setTimeOffs] = useState<any[]>([]);
 
+    // Atualizar bookings quando photographer mudar
     useEffect(() => {
-        const fetchData = async () => {
-            const photographerData = await getPhotographerById(user.id);
-            if (photographerData) {
-                setPhotographer(photographerData);
-                const sortedBookings = photographerData.bookings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-                setBookings(sortedBookings);
-            }
+        if (photographer) {
+            const sortedBookings = photographer.bookings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setBookings(sortedBookings);
+        }
+    }, [photographer]);
+
+    useEffect(() => {
+        const fetchTimeOffs = async () => {
             const to = await getTimeOffsForPhotographer(user.id);
             setTimeOffs(to);
         };
-        fetchData();
+        fetchTimeOffs();
     }, [user.id]);
 
     const { pendingPayout, totalPaid, projectedEarnings, monthlyOpportunityCost } = useMemo(() => {
@@ -256,7 +261,7 @@ const PhotographerDashboard: React.FC<{ user: User, onViewDetails: (id: string) 
         return bookings.filter(b => b.status === 'Realizado' && (!b.media_files || b.media_files.length === 0));
     }, [bookings]);
 
-    if (!photographer) {
+    if (isLoading || !photographer) {
         return <div className="text-center p-8">Carregando dashboard...</div>
     }
 

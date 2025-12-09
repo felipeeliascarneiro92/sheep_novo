@@ -3,7 +3,7 @@
 
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 // FIX: Added missing function imports from bookingService.ts.
 import { getBookingsForClient, getServices, getClientById, getInvoicesForClient } from '../services/bookingService';
 import { Booking, Service, BookingHistory, Client } from '../types';
@@ -11,50 +11,46 @@ import { CameraIcon, ListOrderedIcon, MessageSquareIcon, FileTextIcon, MapPinIco
 import { User } from '../App';
 import Skeleton from './Skeleton';
 import MarketingWidget from './MarketingWidget';
+import { useClient } from '../hooks/useQueries';
 
 // New component for metrics
 const DashboardMetrics: React.FC<{ bookings: Booking[], userId: string }> = ({ bookings, userId }) => {
-    const [client, setClient] = useState<Client | null>(null);
-    const [loading, setLoading] = useState(true);
+    // ✅ OTIMIZAÇÃO: Usar hook com cache ao invés de fetch manual
+    const { data: client, isLoading: loading } = useClient(userId);
+
     const [financialMetric, setFinancialMetric] = useState<{ label: string, value: string, icon: React.ReactNode, alert?: boolean } | null>(null);
 
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            // Fetch client details to determine payment type and financial status
-            const clientData = await getClientById(userId);
-            setClient(clientData || null);
+        const calculateMetric = async () => {
+            if (!client) return;
 
-            if (clientData) {
-                if (clientData.paymentType === 'Pré-pago') {
-                    const isLowBalance = clientData.balance < 50;
-                    setFinancialMetric({
-                        label: 'Saldo em Carteira',
-                        value: `R$ ${clientData.balance.toFixed(2)}`,
-                        icon: <WalletIcon className={`w-6 h-6 ${isLowBalance ? 'text-amber-500' : 'text-emerald-500'}`} />,
-                        alert: isLowBalance
-                    });
-                } else {
-                    // Pós-pago: Calculate pending invoices
-                    const invoices = await getInvoicesForClient(clientData.id);
-                    const pendingAmount = invoices
-                        .filter(inv => inv.status === 'Pendente' || inv.status === 'Atrasado')
-                        .reduce((sum, inv) => sum + inv.amount, 0);
+            if (client.paymentType === 'Pré-pago') {
+                const isLowBalance = client.balance < 50;
+                setFinancialMetric({
+                    label: 'Saldo em Carteira',
+                    value: `R$ ${client.balance.toFixed(2)}`,
+                    icon: <WalletIcon className={`w-6 h-6 ${isLowBalance ? 'text-amber-500' : 'text-emerald-500'}`} />,
+                    alert: isLowBalance
+                });
+            } else {
+                // Pós-pago: Calculate pending invoices
+                const invoices = await getInvoicesForClient(client.id);
+                const pendingAmount = invoices
+                    .filter(inv => inv.status === 'Pendente' || inv.status === 'Atrasado')
+                    .reduce((sum, inv) => sum + inv.amount, 0);
 
-                    const hasDebt = pendingAmount > 0;
+                const hasDebt = pendingAmount > 0;
 
-                    setFinancialMetric({
-                        label: 'Faturas em Aberto',
-                        value: `R$ ${pendingAmount.toFixed(2)}`,
-                        icon: <FileTextIcon className={`w-6 h-6 ${hasDebt ? 'text-orange-500' : 'text-slate-500'}`} />,
-                        alert: hasDebt
-                    });
-                }
+                setFinancialMetric({
+                    label: 'Faturas em Aberto',
+                    value: `R$ ${pendingAmount.toFixed(2)}`,
+                    icon: <FileTextIcon className={`w-6 h-6 ${hasDebt ? 'text-orange-500' : 'text-slate-500'}`} />,
+                    alert: hasDebt
+                });
             }
-            setLoading(false);
         };
-        fetchData();
-    }, [userId, bookings]); // Re-run if bookings change (might affect balance indirectly via refresh)
+        calculateMetric();
+    }, [client]); // Só recalcula quando client mudar
 
     const totalBookingsThisMonth = bookings.filter(b => {
         const bookingDate = new Date(b.date);

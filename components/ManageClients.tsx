@@ -6,6 +6,7 @@ import { UserIcon, SearchIcon, DollarSignIcon, ListOrderedIcon, CalendarIcon, Ar
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { maskPhone, maskCPF, maskCNPJ, maskCEP } from '../utils/masks';
+import { useClients, useClient, useInvalidateClients } from '../hooks/useQueries';
 
 
 // --- SUB-COMPONENT: CLIENT FORM PAGE (replaces old modal) ---
@@ -938,27 +939,19 @@ const BookingHistoryItem: React.FC<{ booking: Booking }> = ({ booking }) => (<di
 
 // --- MAIN COMPONENT ---
 const ManageClients: React.FC = () => {
+    // ✅ OTIMIZAÇÃO: Usar hook com cache ao invés de useEffect manual
+    const { data: allClients = [], isLoading, refetch } = useClients();
+    const invalidateClients = useInvalidateClients();
+
     const [view, setView] = useState<'list' | 'details' | 'edit'>('list');
     const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [allClients, setAllClients] = useState<Client[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [clientForInvoice, setClientForInvoice] = useState<Client | null>(null);
     const { impersonate } = useAuth();
 
-    useEffect(() => {
-        fetchClients();
-    }, []);
-
-    const fetchClients = async () => {
-        setIsLoading(true);
-        const data = await getClients();
-        setAllClients(data);
-        setIsLoading(false);
-    };
-
     const refreshClients = async () => {
-        await fetchClients();
+        invalidateClients(); // Invalida cache
+        refetch(); // Refetch imediato
         if (selectedClientId) {
             const updatedClient = await getClientById(selectedClientId);
             if (!updatedClient) {

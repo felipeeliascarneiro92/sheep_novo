@@ -16,6 +16,7 @@ import CreativeStudioPage from './CreativeStudioPage';
 import AppointmentDetailsPage from './AppointmentDetailsPage';
 import InvoiceDetailsPage from './InvoiceDetailsPage';
 import ClientProfilePage from './ClientProfilePage';
+import ChatPage from './ChatPage';
 import { User } from '../App';
 import { getClientById } from '../services/bookingService';
 import ClientSidebar from './ClientSidebar';
@@ -93,6 +94,7 @@ const ClientApp: React.FC<{ user: User, onLogout: () => void }> = ({ user, onLog
             case 'referral': return user.role === 'client' ? <ReferralPage user={user} /> : null;
             case 'studio': return user.role === 'client' ? <CreativeStudioPage user={user} onSuccess={() => handleNavigate('appointments')} /> : null;
             case 'profile': return <ClientProfilePage user={user} />;
+            case 'chat': return <ChatPage />;
             default: return <div>Página não encontrada</div>;
         }
     };

@@ -104,7 +104,7 @@ export const completeBooking = async (id: string, internalNotes: string, commonA
 export {
     uploadMaterialForBooking, deliverAndCompleteBooking, addTipToBooking,
     updateKeyStatus, reassignBooking, getContextualUpsells, getBookingDuration,
-    generateMarketingDescription, updateBookingFull
+    generateMarketingDescription, updateBookingFull, loadGoogleMapsScript
 } from './scheduleService';
 
 export { uploadCreativeStudioFile } from './resourceService';

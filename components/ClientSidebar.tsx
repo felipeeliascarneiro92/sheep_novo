@@ -2,10 +2,10 @@
 
 
 import React from 'react';
-import { HomeIcon, CalendarIcon, ListOrderedIcon, DollarSignIcon, WalletIcon, UsersIcon, LogOutIcon, XIcon, HelpCircleIcon, GiftIcon, WandIcon, UserIcon } from './icons';
+import { HomeIcon, CalendarIcon, ListOrderedIcon, DollarSignIcon, WalletIcon, UsersIcon, LogOutIcon, XIcon, HelpCircleIcon, GiftIcon, WandIcon, UserIcon, MessageCircleIcon } from './icons';
 import { Client } from '../types';
 
-type ClientPage = 'dashboard' | 'booking' | 'appointments' | 'billing' | 'brokers' | 'wallet' | 'help' | 'referral' | 'studio' | 'profile';
+type ClientPage = 'dashboard' | 'booking' | 'appointments' | 'billing' | 'brokers' | 'wallet' | 'help' | 'referral' | 'studio' | 'profile' | 'chat';
 type UserRole = 'client' | 'broker' | 'admin' | 'photographer' | 'editor' | null;
 
 interface ClientSidebarProps {
@@ -48,6 +48,7 @@ const ClientSidebar: React.FC<ClientSidebarProps> = ({ currentPage, onNavigate, 
             <button onClick={() => handleNavClick('studio')} className={`${navItemClasses} ${currentPage === 'studio' ? activeClasses : inactiveClasses}`}><WandIcon className="w-5 h-5" /> Creative Studio</button>
           )}
           <button onClick={() => handleNavClick('appointments')} className={`${navItemClasses} ${currentPage === 'appointments' ? activeClasses : inactiveClasses}`}><ListOrderedIcon className="w-5 h-5" /> Meus Agendamentos</button>
+          <button onClick={() => handleNavClick('chat')} className={`${navItemClasses} ${currentPage === 'chat' ? activeClasses : inactiveClasses}`}><MessageCircleIcon className="w-5 h-5" /> Chat do Dia</button>
           {userRole === 'client' && <>
             <button onClick={() => handleNavClick('billing')} className={`${navItemClasses} ${currentPage === 'billing' ? activeClasses : inactiveClasses}`}><DollarSignIcon className="w-5 h-5" /> Faturas</button>
             {showWallet && <button onClick={() => handleNavClick('wallet')} className={`${navItemClasses} ${currentPage === 'wallet' ? activeClasses : inactiveClasses}`}><WalletIcon className="w-5 h-5" /> Carteira</button>}

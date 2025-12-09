@@ -42,6 +42,67 @@ export const getClients = async (): Promise<Client[]> => {
     return clients.map(mapDbClientToClient);
 };
 
+// ✅ PAGINAÇÃO: Versão paginada para melhor performance
+export const getClientsPaginated = async (
+    page: number = 1,
+    pageSize: number = 50
+): Promise<{ data: Client[], count: number }> => {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data: clients, error, count } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact' })
+        .order('name', { ascending: true })
+        .range(from, to);
+
+    if (error) {
+        console.error('Error fetching clients:', error);
+        return { data: [], count: 0 };
+    }
+
+    return {
+        data: clients.map(mapDbClientToClient),
+        count: count || 0
+    };
+};
+
+// ✅ BUSCA GLOBAL: Busca clientes em todo o banco de dados
+export const searchClients = async (
+    searchQuery: string,
+    page: number = 1,
+    pageSize: number = 50
+): Promise<{ data: Client[], count: number }> => {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    // Normalize search query
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+        // If no search query, return paginated results
+        return getClientsPaginated(page, pageSize);
+    }
+
+    // Search across multiple fields using OR condition
+    const { data: clients, error, count } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact' })
+        .or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,cnpj.ilike.%${query}%,commercial_phone.ilike.%${query}%,mobile_phone.ilike.%${query}%`)
+        .order('name', { ascending: true })
+        .range(from, to);
+
+    if (error) {
+        console.error('Error searching clients:', error);
+        return { data: [], count: 0 };
+    }
+
+    return {
+        data: clients.map(mapDbClientToClient),
+        count: count || 0
+    };
+};
+
 export const getClientById = async (id: string): Promise<Client | undefined> => {
     const { data: client, error } = await supabase.from('clients').select(`
         *,
@@ -77,7 +138,6 @@ export const addClient = async (client: Client) => {
             // Update the existing client with the new password and ensure it's active
             // We also update other fields if they were empty, but primarily we want to set the password (auth simulation)
             const { error } = await supabase.from('clients').update({
-                password: client.password, // In a real app, this would be handled by Supabase Auth
                 is_active: true,
                 // Optionally update other fields if they are missing in the existing record
                 phone: existingClient.phone || client.phone,
@@ -130,7 +190,6 @@ export const addClient = async (client: Client) => {
             asaas_customer_id: client.asaasCustomerId,
             profile_pic_url: client.profilePicUrl,
             history: client.history || [],
-            password: client.password, // Added for auth simulation
             whatsapp_notification1: client.whatsappNotification1,
             whatsapp_notification2: client.whatsappNotification2,
             notification_preferences: client.notificationPreferences

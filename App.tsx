@@ -42,6 +42,7 @@ import ManageMarketingPage from './components/ManageMarketingPage';
 import CrmDashboardPage from './components/CrmDashboardPage';
 import EditorPayrollPage from './components/EditorPayrollPage';
 import ChatPage from './components/ChatPage';
+import ModernAuthScreen from './components/ModernAuthScreen';
 
 
 // Icons
@@ -57,6 +58,7 @@ type PhotographerPage = 'dashboard' | 'calendar' | 'appointments' | 'receivables
 type BrokerPage = 'dashboard' | 'booking' | 'appointments' | 'chat';
 type AdminPage = 'dashboard' | 'admin-booking' | 'appointments' | 'visual-agenda' | 'reports' | 'photographers' | 'clients' | 'brokers' | 'editors' | 'admins' | 'common-areas' | 'services' | 'finance' | 'billing-generator' | 'settings' | 'wallet' | 'coupons' | 'editing' | 'tasks' | 'audit' | 'payroll' | 'payroll-editors' | 'marketing' | 'crm' | 'chat';
 type EditorPage = 'admin-booking' | 'appointments' | 'visual-agenda' | 'clients' | 'common-areas' | 'editing' | 'tasks';
+type ClientPage = 'dashboard' | 'booking' | 'appointments' | 'billing' | 'brokers' | 'wallet' | 'help' | 'referral' | 'studio' | 'profile' | 'chat';
 export type UserRole = 'client' | 'photographer' | 'admin' | 'broker' | 'editor' | null;
 
 export interface User {
@@ -740,7 +742,7 @@ const MainContent: React.FC = () => {
     }
 
     if (!user) {
-        return <AuthScreen />;
+        return <ModernAuthScreen />;
     }
 
     return (

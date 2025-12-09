@@ -9,7 +9,8 @@ import { getPhotographers, getServices, addPhotographer, updatePhotographer, upd
 import { Photographer, Service, ServiceCategory, DayOfWeek, PhotographerHistory } from '../types';
 import { CameraIcon, SearchIcon, PhoneIcon, MapPinIcon, RouteIcon, PlusIcon, XIcon, MailIcon, LockIcon, UserIcon, EditIcon, HistoryIcon, DollarSignIcon, ArrowLeftIcon, CheckCircleIcon, XCircleIcon, FileTextIcon, EyeIcon } from './icons';
 import { maskPhone } from '../utils/masks';
-import { usePhotographers, useInvalidatePhotographers } from '../hooks/useQueries';
+import { usePhotographers, useInvalidatePhotographers, usePhotographersPaginated } from '../hooks/useQueries';
+import Pagination from './Pagination';
 
 const serviceCategories: ServiceCategory[] = ['Foto', 'Vídeo', 'Aéreo', 'Pacotes', 'Outros'];
 
@@ -503,8 +504,15 @@ import PhotographerCoverageMap from './PhotographerCoverageMap';
 const ManagePhotographers: React.FC = () => {
     const { impersonate } = useAuth();
 
-    // ✅ OTIMIZAÇÃO: Usar hook com cache ao invés de useEffect manual
-    const { data: allPhotographers = [], isLoading, refetch } = usePhotographers();
+    // ✅ OTIMIZAÇÃO: Paginação + Cache
+    const [currentPage, setCurrentPage] = useState(1);
+    const PAGE_SIZE = 50;
+
+    const { data: paginatedData, isLoading, isFetching, refetch } = usePhotographersPaginated(currentPage, PAGE_SIZE);
+    const allPhotographers = paginatedData?.data || [];
+    const totalCount = paginatedData?.count || 0;
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
     const invalidatePhotographers = useInvalidatePhotographers();
 
     const [view, setView] = useState<'list' | 'prices' | 'map'>('list');
@@ -639,6 +647,18 @@ const ManagePhotographers: React.FC = () => {
                         </div>
                     </div>
                 ))}</div>
+
+                {/* Paginação */}
+                {totalPages > 1 && (
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalCount={totalCount}
+                        pageSize={PAGE_SIZE}
+                        onPageChange={setCurrentPage}
+                        isLoading={isFetching}
+                    />
+                )}
             </div>
             {isFormModalOpen && <PhotographerFormModal onClose={() => setIsFormModalOpen(false)} onSave={handleSave} initialData={selectedPhotographer || undefined} />}
             {isHistoryModalOpen && selectedPhotographer && <PhotographerHistoryModal photographer={selectedPhotographer} onClose={() => setIsHistoryModalOpen(false)} />}

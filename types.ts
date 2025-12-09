@@ -238,6 +238,7 @@ export interface Client {
 
   // Financial
   cnpj: string;
+  cpf?: string; // CPF for Pessoa Física (optional, stored in cnpj field too for backward compatibility)
   stateRegistration: string;
   dueDay: number; // 1-31
   paymentMethod: string;

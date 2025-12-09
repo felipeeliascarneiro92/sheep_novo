@@ -6,7 +6,9 @@ import { UserIcon, SearchIcon, DollarSignIcon, ListOrderedIcon, CalendarIcon, Ar
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { maskPhone, maskCPF, maskCNPJ, maskCEP } from '../utils/masks';
-import { useClients, useClient, useInvalidateClients } from '../hooks/useQueries';
+import { useClients, useClient, useInvalidateClients, useClientsPaginated, useClientsSearch } from '../hooks/useQueries';
+import Pagination from './Pagination';
+import { useDebounce } from '../hooks/useDebounce';
 
 
 // --- SUB-COMPONENT: CLIENT FORM PAGE (replaces old modal) ---
@@ -939,15 +941,26 @@ const BookingHistoryItem: React.FC<{ booking: Booking }> = ({ booking }) => (<di
 
 // --- MAIN COMPONENT ---
 const ManageClients: React.FC = () => {
-    // ✅ OTIMIZAÇÃO: Usar hook com cache ao invés de useEffect manual
-    const { data: allClients = [], isLoading, refetch } = useClients();
-    const invalidateClients = useInvalidateClients();
+    // ✅ OTIMIZAÇÃO: Paginação + Cache
+    const [currentPage, setCurrentPage] = useState(1);
+    const PAGE_SIZE = 50;
 
     const [view, setView] = useState<'list' | 'details' | 'edit'>('list');
     const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [clientForInvoice, setClientForInvoice] = useState<Client | null>(null);
     const { impersonate } = useAuth();
+
+    // ✅ OTIMIZAÇÃO: Debounce search query para reduzir queries excessivas
+    const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+    // ✅ CORREÇÃO: Usar busca global no banco de dados
+    const { data: paginatedData, isLoading, isFetching, refetch } = useClientsSearch(debouncedSearchQuery, currentPage, PAGE_SIZE);
+    const allClients = paginatedData?.data || [];
+    const totalCount = paginatedData?.count || 0;
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+    const invalidateClients = useInvalidateClients();
 
     const refreshClients = async () => {
         invalidateClients(); // Invalida cache
@@ -962,15 +975,13 @@ const ManageClients: React.FC = () => {
     };
 
     const filteredClients = useMemo(() => {
-        const sortedClients = [...allClients].sort((a, b) => a.name.localeCompare(b.name));
-        if (!searchQuery.trim()) return sortedClients;
+        return [...allClients].sort((a, b) => a.name.localeCompare(b.name));
+    }, [allClients]);
 
-        const lowerQuery = searchQuery.toLowerCase();
-        return sortedClients.filter(client =>
-            (client.name || '').toLowerCase().includes(lowerQuery) ||
-            (client.phone || '').toLowerCase().includes(lowerQuery)
-        );
-    }, [allClients, searchQuery]);
+    // \u2705 UX: Resetar página para 1 quando a busca mudar
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [debouncedSearchQuery]);
 
     const handleViewDetails = (clientId: string) => {
         setSelectedClientId(clientId);
@@ -1107,6 +1118,18 @@ const ManageClients: React.FC = () => {
                         </div>
                     )) : (<div className="text-center py-10 text-slate-500 dark:text-slate-400"><p>Nenhum cliente encontrado.</p></div>)}
                 </div>
+
+                {/* Paginação */}
+                {totalPages > 1 && (
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalCount={totalCount}
+                        pageSize={PAGE_SIZE}
+                        onPageChange={setCurrentPage}
+                        isLoading={isFetching}
+                    />
+                )}
             </div>
 
             {clientForInvoice && (

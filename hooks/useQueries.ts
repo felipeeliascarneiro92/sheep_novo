@@ -9,12 +9,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     getPhotographers,
     getPhotographerById,
+    getPhotographersPaginated,
     getClients,
     getClientById,
+    getClientsPaginated,
     getServices,
     getAllBookings,
     getBookingById
 } from '../services/bookingService';
+import { searchClients } from '../services/clientService';
 import { Photographer, Client, Service, Booking } from '../types';
 
 // ==================== PHOTOGRAPHERS ====================
@@ -152,4 +155,50 @@ export const useInvalidateServices = () => {
     return () => {
         queryClient.invalidateQueries({ queryKey: ['services'] });
     };
+};
+
+// ==================== PAGINATION HOOKS ====================
+
+/**
+ * Hook para buscar fotógrafos paginados
+ * @param page - Número da página (começa em 1)
+ * @param pageSize - Itens por página (padrão: 50)
+ */
+export const usePhotographersPaginated = (page: number, pageSize: number = 50) => {
+    return useQuery({
+        queryKey: ['photographers', 'paginated', page, pageSize],
+        queryFn: () => getPhotographersPaginated(page, pageSize),
+        staleTime: 10 * 60 * 1000, // 10 minutos
+        placeholderData: (previousData) => previousData, // Mantém dados anteriores enquanto carrega próxima página
+    });
+};
+
+/**
+ * Hook para buscar clientes paginados
+ * @param page - Número da página (começa em 1)
+ * @param pageSize - Itens por página (padrão: 50)
+ */
+export const useClientsPaginated = (page: number, pageSize: number = 50) => {
+    return useQuery({
+        queryKey: ['clients', 'paginated', page, pageSize],
+        queryFn: () => getClientsPaginated(page, pageSize),
+        staleTime: 5 * 60 * 1000, // 5 minutos
+        placeholderData: (previousData) => previousData, // Mantém dados anteriores enquanto carrega próxima página
+    });
+};
+
+/**
+ * Hook para buscar clientes com pesquisa global (busca em todo banco)
+ * @param searchQuery - Termo de pesquisa (nome, telefone, email, CNPJ)
+ * @param page - Número da página (começa em 1)
+ * @param pageSize - Itens por página (padrão: 50)
+ */
+export const useClientsSearch = (searchQuery: string, page: number, pageSize: number = 50) => {
+    return useQuery({
+        queryKey: ['clients', 'search', searchQuery, page, pageSize],
+        queryFn: () => searchClients(searchQuery, page, pageSize),
+        staleTime: 2 * 60 * 1000, // 2 minutos - cache mais curto para buscas
+        placeholderData: (previousData) => previousData,
+        enabled: searchQuery.length >= 0, // Sempre habilitado
+    });
 };

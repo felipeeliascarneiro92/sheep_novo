@@ -58,6 +58,43 @@ export const getPhotographers = async (): Promise<Photographer[]> => {
     }));
 };
 
+// ✅ PAGINAÇÃO: Versão paginada para melhor performance
+export const getPhotographersPaginated = async (
+    page: number = 1,
+    pageSize: number = 50
+): Promise<{ data: Photographer[], count: number }> => {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data: photographers, error, count } = await supabase
+        .from('photographers')
+        .select('*', { count: 'exact' })
+        .order('name', { ascending: true })
+        .range(from, to);
+
+    if (error) {
+        console.error('Error fetching photographers:', error);
+        return { data: [], count: 0 };
+    }
+
+    // Fetch bookings for these photographers only
+    const photographerIds = photographers.map(p => p.id);
+    const { data: bookings } = await supabase
+        .from('bookings')
+        .select('*')
+        .in('photographer_id', photographerIds);
+
+    const result = photographers.map(p => ({
+        ...photographerFromDb(p),
+        bookings: bookings ? bookings.filter((b: any) => b.photographer_id === p.id) : []
+    }));
+
+    return {
+        data: result,
+        count: count || 0
+    };
+};
+
 export const getPhotographerById = async (id: string): Promise<Photographer | undefined> => {
     const { data: photographer, error } = await supabase
         .from('photographers')

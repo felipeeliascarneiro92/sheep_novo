@@ -1073,8 +1073,17 @@ export const uploadMaterialForBooking = async (id: string, fileNames: string[]) 
 
         // NOTIFICATION: WhatsApp to Client (Completion)
         const client = await getClientById(booking.client_id);
-        if (client && client.phone) {
-            notifyClientBookingCompleted(booking, client.name, client.phone);
+        if (client) {
+            if (client.phone) {
+                notifyClientBookingCompleted(booking, client.name, client.phone);
+            }
+            // 📧 Send Photo Delivery Email
+            console.log('📧 Sending photo delivery email to:', client.email);
+            // Verify if dropbox link exists, if not, use a fallback call-to-action or wait for it
+            // For now, we assume the link is in booking.dropboxFolderLink or booking.media_files
+            import('./emailService').then(({ sendPhotoDelivery }) => {
+                sendPhotoDelivery(booking, client).catch(err => console.error('❌ Failed to send delivery email:', err));
+            });
         }
     }
     return booking!;

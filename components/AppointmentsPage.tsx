@@ -13,6 +13,7 @@ import { FilterIcon, MapPinIcon, ClockIcon, ListOrderedIcon, CameraIcon, Calenda
 import { User } from '../App';
 import Calendar from './Calendar';
 import Skeleton from './Skeleton';
+import { sendBookingCancellation } from '../services/emailService';
 
 const statusOptions: BookingStatus[] = ['Confirmado', 'Cancelado', 'Pendente', 'Realizado', 'Concluído'];
 
@@ -88,6 +89,17 @@ export const CancelModal: React.FC<{
         try {
             await updateBookingStatus(booking.id, 'Cancelado', `Cancelado por ${actor}: ${finalReason} `, actor);
             showToast('Agendamento cancelado com sucesso!', 'success');
+
+            // 📧 Send Cancellation Email (Async)
+            getClientById(booking.client_id).then(client => {
+                if (client) {
+                    console.log('📧 Sending cancellation email to:', client.email);
+                    sendBookingCancellation(booking, client).catch(err => console.error('❌ Failed to send cancellation email:', err));
+                } else {
+                    console.warn('⚠️ Could not find client to send cancellation email', booking.client_id);
+                }
+            });
+
             onConfirm(); // Sync with server
         } catch (error) {
             console.error("Error cancelling booking", error);

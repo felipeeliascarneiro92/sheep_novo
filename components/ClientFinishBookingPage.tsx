@@ -7,6 +7,7 @@ import Calendar from './Calendar';
 import WeatherWidget from './WeatherWidget';
 import ServiceAddons, { ADDONS } from './ServiceAddons';
 import Skeleton from './Skeleton';
+import { sendBookingConfirmation } from '../services/emailService';
 
 interface ClientFinishBookingPageProps {
     bookingId: string;
@@ -144,6 +145,8 @@ const ClientFinishBookingPage: React.FC<ClientFinishBookingPageProps> = ({ booki
     const handleConfirm = async () => {
         if (!selectedSlot) return;
 
+        console.log('🔄 Tentando finalizar agendamento...');
+
         const dateStr = selectedDate.toISOString().split('T')[0];
         const result = await finalizeDraftBooking(
             bookingId,
@@ -155,9 +158,34 @@ const ClientFinishBookingPage: React.FC<ClientFinishBookingPageProps> = ({ booki
             appliedCoupon?.code
         );
 
+        console.log('🔄 Resultado do finalizeDraftBooking:', result);
+
         if (result) {
+            console.log('✅ Sucesso no banco! Preparando envio de email...');
             setIsConfirmed(true);
+
+            if (booking && client) {
+                console.log('📧 Enviando email para:', client.email);
+
+                const finalBookingData = {
+                    ...booking,
+                    date: dateStr,
+                    start_time: selectedSlot,
+                    service_ids: selectedServiceIds,
+                    total_price: finalPrice,
+                    address: booking.address
+                };
+
+                // Chamada direta
+                sendBookingConfirmation(finalBookingData, client)
+                    .then(res => console.log('📨 Resposta do envio:', res))
+                    .catch(err => console.error('❌ ERRO CRÍTICO no envio:', err));
+
+            } else {
+                console.error('⚠️ IMPOSSÍVEL ENVIAR EMAIL: Booking ou Client nulos', { booking, client });
+            }
         } else {
+            console.error('❌ Falha ao finalizar agendamento');
             alert('Erro ao finalizar agendamento. Tente outro horário.');
         }
     };

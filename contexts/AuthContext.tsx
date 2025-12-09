@@ -7,7 +7,7 @@ import { supabase } from '../services/supabase';
 
 interface AuthContextType {
     user: User | null;
-    login: (email: string, password: string) => Promise<boolean>;
+    login: (email: string, password: string, rememberMe?: boolean) => Promise<boolean>;
     logout: () => void;
     isLoading: boolean;
     quickLogin: (role: string) => Promise<void>;
@@ -25,7 +25,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         // Check localStorage for existing session
-        const savedUser = localStorage.getItem('sheep_user');
+        // Check localStorage or sessionStorage for existing session
+        const savedUser = localStorage.getItem('sheep_user') || sessionStorage.getItem('sheep_user');
         const savedOriginalUser = localStorage.getItem('sheep_original_user');
 
         if (savedUser) {
@@ -49,13 +50,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsLoading(false);
     }, []);
 
-    const login = async (email: string, password: string): Promise<boolean> => {
+    const login = async (email: string, password: string, rememberMe: boolean = true): Promise<boolean> => {
         setIsLoading(true);
         try {
             const authenticatedUser = await authenticateUser(email, password);
             if (authenticatedUser) {
                 setUser(authenticatedUser);
-                localStorage.setItem('sheep_user', JSON.stringify(authenticatedUser));
+                if (rememberMe) {
+                    localStorage.setItem('sheep_user', JSON.stringify(authenticatedUser));
+                } else {
+                    sessionStorage.setItem('sheep_user', JSON.stringify(authenticatedUser));
+                }
                 return true;
             }
             return false;
@@ -84,12 +89,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const logout = () => {
+    const logout = async () => {
+        await supabase.auth.signOut();
         setUser(null);
         setOriginalUser(null);
         localStorage.removeItem('sheep_user');
         localStorage.removeItem('sheep_original_user');
-        supabase.auth.signOut(); // Ensure Supabase session is cleared too
+        sessionStorage.removeItem('sheep_user');
     };
 
     const impersonate = async (userId: string) => {

@@ -2,10 +2,12 @@
 import React, { useState, useMemo, FormEvent, useRef, useEffect } from 'react';
 import { getEditors, addEditor, updateEditor, updateEntityProfilePicture } from '../services/bookingService';
 import { Editor } from '../types';
-import { SearchIcon, PlusIcon, EditIcon, WandIcon, CheckCircleIcon, XCircleIcon, UserIcon, PhoneIcon, MailIcon, XIcon, CameraIcon } from './icons';
+import { SearchIcon, PlusIcon, EditIcon, WandIcon, CheckCircleIcon, XCircleIcon, UserIcon, PhoneIcon, MailIcon, XIcon, CameraIcon, EyeIcon } from './icons';
 import { maskPhone } from '../utils/masks';
+import { useAuth } from '../contexts/AuthContext';
 
 const ManageEditors: React.FC = () => {
+    const { impersonate } = useAuth();
     const [allEditors, setAllEditors] = useState<Editor[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -96,6 +98,9 @@ const ManageEditors: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex gap-2 w-full sm:w-auto justify-end">
+                                <button onClick={() => impersonate(editor.id)} className="text-sm font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 px-3 py-1.5 rounded-md transition-colors flex items-center gap-2 border border-purple-200 dark:border-purple-800" title="Acessar Painel">
+                                    <EyeIcon className="w-4 h-4" /> Acessar
+                                </button>
                                 <button onClick={() => handleToggleStatus(editor)} className={`text-sm font-semibold px-3 py-1.5 rounded-md transition-colors border flex items-center gap-1 ${editor.isActive ? 'text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20' : 'text-green-600 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-900/20'}`}>
                                     {editor.isActive ? <><XCircleIcon className="w-4 h-4" /> Inativar</> : <><CheckCircleIcon className="w-4 h-4" /> Ativar</>}
                                 </button>
@@ -107,7 +112,7 @@ const ManageEditors: React.FC = () => {
                     ))}
                     {filteredEditors.length === 0 && <div className="text-center py-10 text-slate-500 dark:text-slate-400">Nenhum editor encontrado.</div>}
                 </div>
-            </div>
+            </div >
 
             {isModalOpen && (
                 <EditorFormModal
@@ -116,7 +121,7 @@ const ManageEditors: React.FC = () => {
                     initialData={selectedEditor}
                 />
             )}
-        </div>
+        </div >
     );
 };
 

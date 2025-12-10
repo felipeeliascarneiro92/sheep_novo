@@ -138,23 +138,38 @@ const ChatPage: React.FC = () => {
                                 }}
                                 className={`p-4 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${selectedConv?.id === conv.id ? 'bg-purple-50 dark:bg-purple-900/20 border-l-4 border-l-purple-500' : ''}`}
                             >
-                                <div className="flex justify-between mb-1">
-                                    <span className="font-bold text-slate-700 dark:text-slate-200 text-sm truncate">
+                                <div className="flex justify-between items-start mb-1">
+                                    <span className="font-bold text-slate-700 dark:text-slate-200 text-sm truncate flex-1">
                                         {user?.role === 'photographer' ? conv.booking?.client_name : conv.booking?.photographer_name || 'Aguardando Fotógrafo'}
                                     </span>
-                                    <span className="text-[10px] text-slate-400 flex items-center gap-2">
-                                        {conv.booking?.start_time}
-                                        {conv.unreadCount && conv.unreadCount > 0 ? (
-                                            <span className="bg-red-500 text-white rounded-full px-2 py-0.5 text-[10px] font-bold min-w-[1.25rem] text-center">
-                                                {conv.unreadCount}
-                                            </span>
-                                        ) : null}
-                                    </span>
+                                    {conv.unreadCount && conv.unreadCount > 0 && (
+                                        <span className="bg-red-500 text-white rounded-full px-2 py-0.5 text-[10px] font-bold min-w-[1.25rem] text-center ml-2">
+                                            {conv.unreadCount}
+                                        </span>
+                                    )}
                                 </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+
+                                {/* Booking Context Info */}
+                                <div className="flex flex-col gap-1.5 mb-2 mt-2 bg-slate-100 dark:bg-slate-700/50 p-2 rounded-md">
+                                    <div className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                                        <ClockIcon className="w-3 h-3 flex-shrink-0 text-purple-500" />
+                                        <span className="font-medium">{conv.booking?.start_time || '--:--'}</span>
+                                        <span className="text-slate-400 mx-1">|</span>
+                                        <span className="bg-white dark:bg-slate-800 px-1.5 rounded text-[10px] border border-slate-200 dark:border-slate-600">
+                                            {new Date(conv.booking?.date || '').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                                        <MapPinIcon className="w-3 h-3 flex-shrink-0 text-purple-500" />
+                                        <span className="truncate">{conv.booking?.address || 'Endereço não disponível'}</span>
+                                    </div>
+                                </div>
+
+                                <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-1 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 inline-block"></span>
                                     {conv.messages && conv.messages.length > 0
                                         ? conv.messages[conv.messages.length - 1].content
-                                        : 'Inicie a conversa...'}
+                                        : <span className="italic opacity-70">Nenhuma mensagem</span>}
                                 </p>
                             </div>
                         ))

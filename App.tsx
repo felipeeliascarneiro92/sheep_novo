@@ -44,6 +44,7 @@ import EditorPayrollPage from './components/EditorPayrollPage';
 import ChatPage from './components/ChatPage';
 import ModernAuthScreen from './components/ModernAuthScreen';
 import ResetPasswordPage from './components/ResetPasswordPage';
+import EditorDashboardPage from './components/EditorDashboardPage';
 
 
 // Icons
@@ -58,7 +59,7 @@ import Skeleton from './components/Skeleton';
 type PhotographerPage = 'dashboard' | 'calendar' | 'appointments' | 'receivables' | 'history' | 'common-area' | 'time-off' | 'chat';
 type BrokerPage = 'dashboard' | 'booking' | 'appointments' | 'chat';
 type AdminPage = 'dashboard' | 'admin-booking' | 'appointments' | 'visual-agenda' | 'reports' | 'photographers' | 'clients' | 'brokers' | 'editors' | 'admins' | 'common-areas' | 'services' | 'finance' | 'billing-generator' | 'settings' | 'wallet' | 'coupons' | 'editing' | 'tasks' | 'audit' | 'payroll' | 'payroll-editors' | 'marketing' | 'crm' | 'chat';
-type EditorPage = 'admin-booking' | 'appointments' | 'visual-agenda' | 'clients' | 'common-areas' | 'editing' | 'tasks';
+type EditorPage = 'dashboard' | 'admin-booking' | 'appointments' | 'visual-agenda' | 'clients' | 'common-areas' | 'editing' | 'tasks' | 'chat' | 'audit';
 type ClientPage = 'dashboard' | 'booking' | 'appointments' | 'billing' | 'brokers' | 'wallet' | 'help' | 'referral' | 'studio' | 'profile' | 'chat';
 export type UserRole = 'client' | 'photographer' | 'admin' | 'broker' | 'editor' | null;
 
@@ -590,13 +591,15 @@ const EditorSidebar: React.FC<{ currentPage: EditorPage; onNavigate: (page: Edit
                     <button onClick={onClose} className="md:hidden p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800"><XIcon className="w-6 h-6 text-slate-500 dark:text-slate-400" /></button>
                 </div>
                 <nav className="flex-1 space-y-2 overflow-y-auto">
-                    <button onClick={() => handleNavClick('tasks')} className={`${navItemClasses} ${currentPage === 'tasks' ? activeClasses : inactiveClasses}`}><CheckSquareIcon className="w-5 h-5" /> Minhas Tarefas</button>
-                    <button onClick={() => handleNavClick('editing')} className={`${navItemClasses} ${currentPage === 'editing' ? activeClasses : inactiveClasses}`}><WandIcon className="w-5 h-5" /> Edição de Imagens</button>
+                    <button onClick={() => handleNavClick('dashboard')} className={`${navItemClasses} ${currentPage === 'dashboard' ? activeClasses : inactiveClasses}`}><HomeIcon className="w-5 h-5" /> Dashboard</button>
                     <button onClick={() => handleNavClick('admin-booking')} className={`${navItemClasses} ${currentPage === 'admin-booking' ? activeClasses : inactiveClasses}`}><PlusIcon className="w-5 h-5" /> Novo Agendamento</button>
                     <button onClick={() => handleNavClick('appointments')} className={`${navItemClasses} ${currentPage === 'appointments' ? activeClasses : inactiveClasses}`}><ListOrderedIcon className="w-5 h-5" /> Agendamentos</button>
                     <button onClick={() => handleNavClick('visual-agenda')} className={`${navItemClasses} ${currentPage === 'visual-agenda' ? activeClasses : inactiveClasses}`}><LayoutGridIcon className="w-5 h-5" /> Agenda Visual</button>
                     <button onClick={() => handleNavClick('clients')} className={`${navItemClasses} ${currentPage === 'clients' ? activeClasses : inactiveClasses}`}><UsersIcon className="w-5 h-5" /> Clientes</button>
                     <button onClick={() => handleNavClick('common-areas')} className={`${navItemClasses} ${currentPage === 'common-areas' ? activeClasses : inactiveClasses}`}><BuildingIcon className="w-5 h-5" /> Áreas Comuns</button>
+                    <button onClick={() => handleNavClick('tasks')} className={`${navItemClasses} ${currentPage === 'tasks' ? activeClasses : inactiveClasses}`}><CheckSquareIcon className="w-5 h-5" /> Minhas Tarefas</button>
+                    <button onClick={() => handleNavClick('chat')} className={`${navItemClasses} ${currentPage === 'chat' ? activeClasses : inactiveClasses}`}><MessageCircleIcon className="w-5 h-5" /> Chat do Dia</button>
+                    <button onClick={() => handleNavClick('audit')} className={`${navItemClasses} ${currentPage === 'audit' ? activeClasses : inactiveClasses}`}><ShieldIcon className="w-5 h-5" /> Timeline Auditoria</button>
                 </nav>
                 <div className="mt-auto pt-4"><button onClick={onLogout} className={`${navItemClasses} ${inactiveClasses}`}><LogOutIcon className="w-5 h-5" /> Sair</button></div>
             </aside>
@@ -605,7 +608,7 @@ const EditorSidebar: React.FC<{ currentPage: EditorPage; onNavigate: (page: Edit
 };
 
 const EditorApp: React.FC<{ user: User, onLogout: () => void }> = ({ user, onLogout }) => {
-    const [currentPage, setCurrentPage] = useState<EditorPage>('tasks');
+    const [currentPage, setCurrentPage] = useState<EditorPage>('dashboard');
     const [viewingBookingId, setViewingBookingId] = useState<string | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const { theme, toggleTheme } = useTheme();
@@ -624,6 +627,9 @@ const EditorApp: React.FC<{ user: User, onLogout: () => void }> = ({ user, onLog
     const renderContent = () => {
         if (viewingBookingId) return <AppointmentDetailsPage user={user} bookingId={viewingBookingId} onBack={handleBackToList} />;
         switch (currentPage) {
+            case 'dashboard': return <EditorDashboardPage user={user} onNavigate={(p: any) => handleNavigate(p)} />;
+            case 'chat': return <ChatPage />;
+            case 'audit': return <AdminAuditPage />;
             case 'editing': return <EditingManagementPage />;
             case 'tasks': return <TasksPage />;
             case 'admin-booking': return <AdminBookingPage onBookingCreated={() => handleNavigate('appointments')} />;
@@ -778,9 +784,36 @@ import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { QueryProvider } from './contexts/QueryProvider';
 
+import { initOneSignal, identifyUserOnOneSignal } from './services/oneSignalService';
+
+const OneSignalInitializer: React.FC = () => {
+    const { user } = useAuth();
+    const [initialized, setInitialized] = useState(false);
+
+    useEffect(() => {
+        const init = async () => {
+            // Evita reinicializar em dev strict mode se já estiver inicializado
+            if (!initialized) {
+                await initOneSignal();
+                setInitialized(true);
+            }
+        };
+        init();
+    }, []); // Run once on mount
+
+    useEffect(() => {
+        if (user && initialized) {
+            identifyUserOnOneSignal(user.id, user.role === 'client' ? (user as any).email : undefined);
+        }
+    }, [user, initialized]);
+
+    return null;
+}
+
 const App: React.FC = () => {
     return (
         <AuthProvider>
+            <OneSignalInitializer />
             <QueryProvider>
                 <ThemeProvider>
                     <ToastProvider>

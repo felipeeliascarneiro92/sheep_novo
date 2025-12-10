@@ -10,12 +10,16 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+    // Handle CORS preflight requests
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
     try {
         const { userIds, title, message, url } = await req.json()
+
+        // Log para debug no painel Supabase
+        console.log(`Sending push to: ${userIds} - Title: ${title}`);
 
         if (!userIds || !title || !message) {
             throw new Error("Missing required fields")
@@ -40,15 +44,17 @@ serve(async (req) => {
         })
 
         const data = await response.json()
+        console.log("OneSignal Response:", data);
 
         return new Response(JSON.stringify(data), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: response.status,
+            status: 200,
         })
     } catch (error) {
+        console.error("Error:", error);
         return new Response(JSON.stringify({ error: error.message }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 400,
+            status: 400, // Retornar 400 em vez de 403 ajuda a diferenciar erros de lógica vs permissão
         })
     }
 })

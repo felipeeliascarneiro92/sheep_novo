@@ -27,9 +27,13 @@ export const initOneSignal = async () => {
     // Check if running on localhost to avoid "domain restricted" errors
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-    // You can force enable this if you want to test on localhost and have configured it in OneSignal dashboard
-    // But defaults to safe mode to avoid console errors if not configured.
-    const shouldInit = !isLocalhost || true; // Currently forcing true to attempt, but catching error below is key.
+    // Disable OneSignal on localhost to prevent "ServiceWorkerRegistration" console spam
+    const shouldInit = !isLocalhost;
+
+    if (!shouldInit) {
+        console.log("🔕 OneSignal desativado no localhost para evitar erros de console.");
+        return;
+    }
 
     try {
         await OneSignal.init({

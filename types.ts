@@ -446,7 +446,16 @@ export interface Network {
   id: string;
   name: string;
   description?: string;
+  target_clients?: number;
   created_at?: string;
+}
+
+export interface NetworkSummary extends Network {
+  total_registered: number;
+  active_count: number;
+  attention_count: number;
+  critical_count: number;
+  no_booking_count: number;
 }
 
 export interface NetworkPrice {

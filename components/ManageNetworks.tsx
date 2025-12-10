@@ -21,7 +21,14 @@ import { formatDistanceToNow, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function ManageNetworks() {
-    const [networks, setNetworks] = useState<(Network & { clientCount?: number })[]>([]);
+    const [networks, setNetworks] = useState<(Network & {
+        clientCount?: number;
+        activeCount?: number;
+        attentionCount?: number;
+        criticalCount?: number;
+        noBookingCount?: number;
+        targetClients?: number;
+    })[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,6 +48,7 @@ export function ManageNetworks() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [newNetworkName, setNewNetworkName] = useState('');
     const [newNetworkDesc, setNewNetworkDesc] = useState('');
+    const [newNetworkTarget, setNewNetworkTarget] = useState(''); // New target clients state
 
     const { showToast } = useToast();
 
@@ -89,10 +97,15 @@ export function ManageNetworks() {
     const handleCreateNetwork = async () => {
         if (!newNetworkName.trim()) return;
         try {
-            await networkService.createNetwork({ name: newNetworkName, description: newNetworkDesc });
+            await networkService.createNetwork({
+                name: newNetworkName,
+                description: newNetworkDesc,
+                target_clients: parseInt(newNetworkTarget) || 0
+            });
             showToast('Rede criada com sucesso!', 'success');
             setNewNetworkName('');
             setNewNetworkDesc('');
+            setNewNetworkTarget('');
             setIsEditMode(false);
             loadData();
         } catch (error) {
@@ -103,7 +116,11 @@ export function ManageNetworks() {
     const handleUpdateNetwork = async () => {
         if (!selectedNetwork || !newNetworkName.trim()) return;
         try {
-            await networkService.updateNetwork(selectedNetwork.id, { name: newNetworkName, description: newNetworkDesc });
+            await networkService.updateNetwork(selectedNetwork.id, {
+                name: newNetworkName,
+                description: newNetworkDesc,
+                target_clients: parseInt(newNetworkTarget) || 0
+            });
             showToast('Rede atualizada!', 'success');
             setIsEditMode(false);
             loadData();
@@ -124,10 +141,11 @@ export function ManageNetworks() {
         }
     };
 
-    const openModal = async (network: Network) => {
+    const openModal = async (network: Network & { target_clients?: number }) => {
         setSelectedNetwork(network);
         setNewNetworkName(network.name);
         setNewNetworkDesc(network.description || '');
+        setNewNetworkTarget(network.target_clients?.toString() || '');
         setIsModalOpen(true);
         setActiveTab('prices');
 
@@ -169,6 +187,7 @@ export function ManageNetworks() {
         setIsModalOpen(false);
         setSelectedNetwork(null);
         setIsEditMode(false);
+        setNewNetworkTarget('');
         // Clear state on close too
         setNetworkClients([]);
         setNetworkPrices([]);
@@ -254,6 +273,99 @@ export function ManageNetworks() {
         return <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full font-medium">Crítico ({days}d)</span>;
     };
 
+    // Helper to render the progress bar
+    const renderNetworkProgressBar = (network: Network & {
+        clientCount?: number;
+        activeCount?: number;
+        attentionCount?: number;
+        criticalCount?: number;
+        noBookingCount?: number;
+        targetClients?: number;
+    }) => {
+        const target = network.targetClients || 0;
+        const currentTotal = network.clientCount || 0;
+
+        // Safety check: if we have clients but no stats (active/critical etc are all undefined/0), 
+        // it likely means the migration hasn't run or RPC failed. 
+        // In this case, show the simple badge to avoid showing "0 Active, 0 Critical" when there are actually 50 clients.
+        const statsSum = (network.activeCount || 0) + (network.attentionCount || 0) + (network.criticalCount || 0) + (network.noBookingCount || 0);
+        const hasStats = statsSum > 0 || currentTotal === 0;
+
+        if (!hasStats && currentTotal > 0) {
+            return (
+                <div className="mb-4">
+                    <div className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 w-fit" title="Estatísticas indisponíveis (verifique banco de dados)">
+                        <UsersIcon className="w-3 h-3" />
+                        {currentTotal} imobiliárias
+                    </div>
+                </div>
+            );
+        }
+
+        // If no clients and no target, show simple empty state
+        if (currentTotal === 0 && target === 0) {
+            return (
+                <div className="mb-4">
+                    <div className="bg-slate-100 text-slate-400 px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 w-fit">
+                        <UsersIcon className="w-3 h-3" />
+                        Sem imobiliárias
+                    </div>
+                </div>
+            );
+        }
+
+        // Calculation Base: Target or Total?
+        const base = target > 0 ? target : currentTotal;
+        const isTargetBased = target > 0;
+
+        // Calculate percentages
+        const activePct = Math.min(((network.activeCount || 0) / base) * 100, 100);
+        const attentionPct = Math.min(((network.attentionCount || 0) / base) * 100, 100);
+        const criticalPct = Math.min(((network.criticalCount || 0) / base) * 100, 100);
+        const noBoookingPct = Math.min(((network.noBookingCount || 0) / base) * 100, 100);
+
+        return (
+            <div className="w-full space-y-2 mb-4">
+                <div className="flex justify-between items-center text-xs mb-1">
+                    <span className="font-semibold text-slate-700">
+                        {currentTotal} {isTargetBased ? `/ ${target}` : ''} imobiliárias
+                    </span>
+                    {isTargetBased && (
+                        <span className="text-slate-500">{Math.round((currentTotal / target) * 100)}% da meta</span>
+                    )}
+                </div>
+
+                {/* Progress Bar Container */}
+                <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                    {(network.activeCount || 0) > 0 && (
+                        <div style={{ width: `${activePct}%` }} className="bg-green-500 h-full" title={`Ativas: ${network.activeCount}`} />
+                    )}
+                    {(network.attentionCount || 0) > 0 && (
+                        <div style={{ width: `${attentionPct}%` }} className="bg-yellow-500 h-full" title={`Inativas: ${network.attentionCount}`} />
+                    )}
+                    {(network.criticalCount || 0) > 0 && (
+                        <div style={{ width: `${criticalPct}%` }} className="bg-red-500 h-full" title={`Críticas: ${network.criticalCount}`} />
+                    )}
+                    {(network.noBookingCount || 0) > 0 && (
+                        <div style={{ width: `${noBoookingPct}%` }} className="bg-slate-400 h-full" title={`Sem Agendamento: ${network.noBookingCount}`} />
+                    )}
+                </div>
+
+                {/* Legend / Stats */}
+                <div className="flex gap-2 text-[10px] text-slate-500 flex-wrap">
+                    {(network.activeCount || 0) > 0 && <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> {network.activeCount}</div>}
+                    {(network.attentionCount || 0) > 0 && <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-yellow-500"></div> {network.attentionCount}</div>}
+                    {(network.criticalCount || 0) > 0 && <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> {network.criticalCount}</div>}
+                    {(network.noBookingCount || 0) > 0 && <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div> {network.noBookingCount}</div>}
+
+                    {isTargetBased && (
+                        <div className="flex items-center gap-1 ml-auto text-slate-400 font-medium">Faltam: {Math.max(0, target - currentTotal)}</div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="p-6 max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-8">
@@ -266,6 +378,7 @@ export function ManageNetworks() {
                         setSelectedNetwork(null);
                         setNewNetworkName('');
                         setNewNetworkDesc('');
+                        setNewNetworkTarget('');
                         setIsEditMode(true);
                         setIsModalOpen(true);
                     }}
@@ -286,14 +399,15 @@ export function ManageNetworks() {
                                 <div className="p-3 bg-purple-100 rounded-lg text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                                     <BuildingIcon className="w-6 h-6" />
                                 </div>
-                                <div className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                                    <UsersIcon className="w-3 h-3" />
-                                    {network.clientCount || 0}
-                                </div>
                             </div>
+
                             <h3 className="text-xl font-bold text-slate-800 mb-2">{network.name}</h3>
                             <p className="text-slate-500 text-sm mb-4 h-10 line-clamp-2">{network.description || 'Sem descrição'}</p>
-                            <div className="flex items-center text-sm text-slate-500 font-medium">
+
+                            {/* Always try to render stats/progress bar */}
+                            {renderNetworkProgressBar(network)}
+
+                            <div className="flex items-center text-sm text-slate-500 font-medium border-t border-slate-100 pt-4 mt-2">
                                 Clique para configurar
                             </div>
                         </div>
@@ -324,18 +438,37 @@ export function ManageNetworks() {
                                             className="text-2xl font-bold text-slate-800 bg-transparent border-b-2 border-purple-200 focus:border-purple-600 focus:outline-none w-full placeholder:text-slate-300"
                                             autoFocus
                                         />
-                                        <input
-                                            type="text"
-                                            value={newNetworkDesc}
-                                            onChange={e => setNewNetworkDesc(e.target.value)}
-                                            placeholder="Descrição (opcional)"
-                                            className="text-sm text-slate-600 bg-transparent border-b border-slate-200 focus:border-purple-400 focus:outline-none w-full"
-                                        />
+                                        <div className="flex gap-4">
+                                            <input
+                                                type="text"
+                                                value={newNetworkDesc}
+                                                onChange={e => setNewNetworkDesc(e.target.value)}
+                                                placeholder="Descrição (opcional)"
+                                                className="text-sm text-slate-600 bg-transparent border-b border-slate-200 focus:border-purple-400 focus:outline-none w-full"
+                                            />
+                                            <div className="w-48 shrink-0 relative">
+                                                <input
+                                                    type="number"
+                                                    value={newNetworkTarget}
+                                                    onChange={e => setNewNetworkTarget(e.target.value)}
+                                                    placeholder="Meta de Imobiliárias"
+                                                    className="text-sm text-slate-600 bg-transparent border-b border-slate-200 focus:border-purple-400 focus:outline-none w-full pl-7"
+                                                />
+                                                <UsersIcon className="w-4 h-4 text-slate-400 absolute left-0 top-0.5" />
+                                            </div>
+                                        </div>
                                     </div>
                                 ) : (
                                     <>
-                                        <h2 className="text-2xl font-bold text-slate-800">{selectedNetwork?.name}</h2>
-                                        <p className="text-slate-500 text-sm">{selectedNetwork?.description}</p>
+                                        <div className="flex items-center gap-3">
+                                            <h2 className="text-2xl font-bold text-slate-800">{selectedNetwork?.name}</h2>
+                                            {selectedNetwork?.target_clients && (
+                                                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium border border-purple-200">
+                                                    Meta: {selectedNetwork.target_clients}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-slate-500 text-sm mt-1">{selectedNetwork?.description}</p>
                                     </>
                                 )}
                             </div>
@@ -354,6 +487,7 @@ export function ManageNetworks() {
                                                 setIsEditMode(true);
                                                 setNewNetworkName(selectedNetwork!.name);
                                                 setNewNetworkDesc(selectedNetwork!.description || '');
+                                                setNewNetworkTarget(selectedNetwork!.target_clients?.toString() || '');
                                             }}
                                             className="text-slate-400 hover:text-purple-600 p-2 rounded-full hover:bg-purple-50"
                                             title="Editar informações"

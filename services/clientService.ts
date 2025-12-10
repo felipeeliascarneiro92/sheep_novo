@@ -131,7 +131,7 @@ export const searchClients = async (
     const { data: clients, error, count } = await supabase
         .from('clients')
         .select('*', { count: 'exact' })
-        .or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,cnpj.ilike.%${query}%,commercial_phone.ilike.%${query}%,mobile_phone.ilike.%${query}%`)
+        .or(`name.ilike.%${query}%,trade_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,cnpj.ilike.%${query}%,commercial_phone.ilike.%${query}%,mobile_phone.ilike.%${query}%`)
         .order('name', { ascending: true })
         .range(from, to);
 

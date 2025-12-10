@@ -5,17 +5,46 @@ import { Network, NetworkPrice } from '../types';
 export const networkService = {
     // --- REDES (NETWORKS) ---
 
-    async getAllNetworks(): Promise<(Network & { clientCount: number })[]> {
+    async getAllNetworks(): Promise<(Network & {
+        clientCount: number;
+        activeCount?: number;
+        attentionCount?: number;
+        criticalCount?: number;
+        noBookingCount?: number;
+        targetClients?: number;
+    })[]> {
+        // Try to call the RPC for full stats
         const { data, error } = await supabase
+            .rpc('get_network_summaries');
+
+        if (!error && data) {
+            return data.map((n: any) => ({
+                id: n.id,
+                name: n.name,
+                description: n.description,
+                target_clients: n.target_clients,
+                clientCount: n.total_registered, // Map total to clientCount for compatibility
+                activeCount: n.active_count,
+                attentionCount: n.attention_count,
+                criticalCount: n.critical_count,
+                noBookingCount: n.no_booking_count
+            }));
+        }
+
+        // Fallback if RPC fails (e.g. not migrated yet)
+        console.warn("RPC get_network_summaries failed, falling back to basic query:", error);
+
+        const { data: basicData, error: basicError } = await supabase
             .from('networks')
             .select('*, clients(count)')
             .order('name');
 
-        if (error) throw error;
+        if (basicError) throw basicError;
 
-        return (data || []).map((network: any) => ({
+        return (basicData || []).map((network: any) => ({
             ...network,
-            clientCount: network.clients ? network.clients[0].count : 0
+            clientCount: network.clients ? network.clients[0].count : 0,
+            target_clients: network.target_clients || 0
         }));
     },
 

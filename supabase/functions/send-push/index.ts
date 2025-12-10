@@ -38,7 +38,7 @@ serve(async (req) => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${ONESIGNAL_REST_API_KEY}`
+                'Authorization': `Basic ${ONESIGNAL_REST_API_KEY}`
             },
             body: JSON.stringify(payload)
         })

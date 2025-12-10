@@ -2,6 +2,7 @@
 import { supabase } from './supabase';
 import { Conversation, Message, Booking } from '../types';
 import { getBookingsForClient, getBookingsForPhotographer, getBookingsByDate, bookingFromDb } from './scheduleService';
+import { sendPushNotification } from './oneSignalService';
 
 // --- CONVERSATIONS ---
 
@@ -125,6 +126,29 @@ export const sendMessage = async (
     if (!error) {
         // Update conversation 'updated_at' to bump it to top of lists if we implemented sorting
         await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
+
+        // 🔥 Trigger OneSignal Push Notification
+        // First, get the conversation to find the booking_id
+        const { data: conv } = await supabase.from('conversations').select('booking_id').eq('id', conversationId).single();
+        if (conv && conv.booking_id) {
+            // Get booking details to know who is involved
+            const { data: booking } = await supabase.from('bookings').select('client_id, photographer_id').eq('id', conv.booking_id).single();
+
+            if (booking) {
+                const recipients = [];
+                // If sender is NOT the client, notify the client
+                if (senderId !== booking.client_id) recipients.push(booking.client_id);
+                // If sender is NOT the photographer, notify the photographer (if assigned)
+                if (booking.photographer_id && senderId !== booking.photographer_id) recipients.push(booking.photographer_id);
+
+                if (recipients.length > 0) {
+                    const pushTitle = 'Nova Mensagem no Chat 💬';
+                    const pushMsg = type === 'text' ? content : (type === 'image' ? '📷 Imagem recebida' : '📎 Arquivo recebido');
+                    // Send push
+                    sendPushNotification(recipients, pushTitle, pushMsg, `/chat`).catch(console.error);
+                }
+            }
+        }
     }
 
     return error;

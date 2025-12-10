@@ -2,6 +2,7 @@
 import { supabase } from './supabase';
 import { Notification } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { sendPushNotification } from './oneSignalService';
 
 export const getNotificationsForUser = async (role: string, userId?: string): Promise<Notification[]> => {
     let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
@@ -60,6 +61,13 @@ export const createNotification = async (
 
     const { error } = await supabase.from('notifications').insert([newNotification]);
     if (error) console.error('Error creating notification:', error);
+
+    // 🔥 Trigger Push Notification (OneSignal)
+    if (userId) {
+        // Send to specific user
+        const fullUrl = link ? `${window.location.origin}${link}` : undefined;
+        sendPushNotification(userId, title, message, fullUrl).catch(e => console.error("Failed to trigger push", e));
+    }
 };
 
 export const markNotificationAsRead = async (id: string) => {

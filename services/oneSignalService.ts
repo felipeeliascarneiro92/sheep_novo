@@ -3,6 +3,36 @@ import OneSignal from 'react-onesignal';
 
 // Substitua pelo seu App ID do OneSignal
 const ONESIGNAL_APP_ID = '83c07f22-1313-4007-a64a-7aac3c2069ab';
+const ONESIGNAL_REST_API_KEY = 'os_v2_app_qpah6iqtcnaapjskpkwdyidjvpuzucdduerentfjiciqp5dsap5sjhevdm6mhhzonmyp2m2l4agcfwafl366l3v3goat5hsmlti73ci';
+
+export const sendPushNotification = async (userId: string | string[], title: string, message: string, url?: string) => {
+    const userIds = Array.isArray(userId) ? userId : [userId];
+
+    const options = {
+        method: 'POST',
+        headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+            Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`
+        },
+        body: JSON.stringify({
+            app_id: ONESIGNAL_APP_ID,
+            include_aliases: { external_id: userIds },
+            target_channel: "push",
+            headings: { en: title, pt: title },
+            contents: { en: message, pt: message },
+            url: url // Optional URL to open
+        })
+    };
+
+    try {
+        const response = await fetch('https://onesignal.com/api/v1/notifications', options);
+        const data = await response.json();
+        console.log('✅ Push Notification sent:', data);
+    } catch (err) {
+        console.error('❌ Error sending Push Notification:', err);
+    }
+};
 
 export const initOneSignal = async () => {
     try {

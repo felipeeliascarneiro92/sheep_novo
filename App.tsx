@@ -45,6 +45,7 @@ import ChatPage from './components/ChatPage';
 import ModernAuthScreen from './components/ModernAuthScreen';
 import ResetPasswordPage from './components/ResetPasswordPage';
 import EditorDashboardPage from './components/EditorDashboardPage';
+import { ManageNetworks } from './components/ManageNetworks';
 
 
 // Icons
@@ -58,7 +59,9 @@ import Skeleton from './components/Skeleton';
 // --- TYPE DEFINITIONS ---
 type PhotographerPage = 'dashboard' | 'calendar' | 'appointments' | 'receivables' | 'history' | 'common-area' | 'time-off' | 'chat';
 type BrokerPage = 'dashboard' | 'booking' | 'appointments' | 'chat';
-type AdminPage = 'dashboard' | 'admin-booking' | 'appointments' | 'visual-agenda' | 'reports' | 'photographers' | 'clients' | 'brokers' | 'editors' | 'admins' | 'common-areas' | 'services' | 'finance' | 'billing-generator' | 'settings' | 'wallet' | 'coupons' | 'editing' | 'tasks' | 'audit' | 'payroll' | 'payroll-editors' | 'marketing' | 'crm' | 'chat';
+
+type AdminPage = 'dashboard' | 'admin-booking' | 'appointments' | 'visual-agenda' | 'reports' | 'photographers' | 'clients' | 'brokers' | 'editors' | 'admins' | 'common-areas' | 'networks' | 'services' | 'finance' | 'billing-generator' | 'settings' | 'wallet' | 'coupons' | 'editing' | 'tasks' | 'audit' | 'payroll' | 'payroll-editors' | 'marketing' | 'crm' | 'chat';
+
 type EditorPage = 'dashboard' | 'admin-booking' | 'appointments' | 'visual-agenda' | 'clients' | 'common-areas' | 'editing' | 'tasks' | 'chat' | 'audit';
 type ClientPage = 'dashboard' | 'booking' | 'appointments' | 'billing' | 'brokers' | 'wallet' | 'help' | 'referral' | 'studio' | 'profile' | 'chat';
 export type UserRole = 'client' | 'photographer' | 'admin' | 'broker' | 'editor' | null;
@@ -234,6 +237,7 @@ const AdminSidebar: React.FC<{ currentPage: AdminPage; onNavigate: (page: AdminP
                             <div className="mt-1 space-y-1 border-l-2 border-slate-200 ml-6 pl-2">
                                 <button onClick={() => handleNavClick('photographers')} className={`${subItemClasses} ${currentPage === 'photographers' ? activeSubClasses : ''}`}>Fotógrafos</button>
                                 <button onClick={() => handleNavClick('clients')} className={`${subItemClasses} ${currentPage === 'clients' ? activeSubClasses : ''}`}>Clientes</button>
+                                <button onClick={() => handleNavClick('networks')} className={`${subItemClasses} ${currentPage === 'networks' ? activeSubClasses : ''}`}>Redes / Grupos</button>
                                 <button onClick={() => handleNavClick('brokers')} className={`${subItemClasses} ${currentPage === 'brokers' ? activeSubClasses : ''}`}>Corretores</button>
                                 <button onClick={() => handleNavClick('editors')} className={`${subItemClasses} ${currentPage === 'editors' ? activeSubClasses : ''}`}>Editores</button>
                                 <button onClick={() => handleNavClick('admins')} className={`${subItemClasses} ${currentPage === 'admins' ? activeSubClasses : ''}`}>Administradores</button>
@@ -384,6 +388,7 @@ const AdminApp: React.FC<{ user: User, onLogout: () => void }> = ({ user, onLogo
             case 'tasks': return <TasksPage />;
             case 'marketing': return <ManageMarketingPage />;
             case 'crm': return <CrmDashboardPage user={user} />;
+            case 'networks': return <ManageNetworks />;
             case 'chat': return <ChatPage />;
             default: return <div>Página não encontrada</div>;
         }

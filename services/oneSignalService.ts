@@ -24,19 +24,31 @@ export const sendPushNotification = async (userId: string | string[], title: str
 };
 
 export const initOneSignal = async () => {
+    // Check if running on localhost to avoid "domain restricted" errors
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    // You can force enable this if you want to test on localhost and have configured it in OneSignal dashboard
+    // But defaults to safe mode to avoid console errors if not configured.
+    const shouldInit = !isLocalhost || true; // Currently forcing true to attempt, but catching error below is key.
+
     try {
         await OneSignal.init({
             appId: ONESIGNAL_APP_ID,
-            allowLocalhostAsSecureOrigin: true, // Permite testar em localhost
-            // notifyButton: { enable: true }, // Removido para simplificar e evitar erros de tipo, configure pelo painel do OneSignal
-            // Configurações para PWA
+            allowLocalhostAsSecureOrigin: true, // Attempt to allow localhost
             serviceWorkerParam: { scope: '/' },
             serviceWorkerPath: 'sw.js',
         });
 
         console.log("✅ OneSignal inicializado com sucesso!");
-    } catch (error) {
-        console.error("❌ Erro ao inicializar OneSignal:", error);
+    } catch (error: any) {
+        // Suppress specific domain error on localhost
+        if (isLocalhost && error?.message?.includes('can only be used on')) {
+            console.warn("⚠️ OneSignal skipped: Domain restriction on localhost.");
+        } else if (error?.message?.includes('SDK already initialized')) {
+            // Ignore this warn
+        } else {
+            console.error("❌ Erro ao inicializar OneSignal:", error);
+        }
     }
 };
 

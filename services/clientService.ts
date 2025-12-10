@@ -20,7 +20,8 @@ const mapDbClientToClient = (dbClient: any): Client => ({
     dueDay: dbClient.due_day,
     paymentMethod: dbClient.payment_method,
     paymentType: dbClient.payment_type,
-    customPrices: dbClient.custom_prices || {},
+    customPrices: dbClient.custom_prices || {}, // This now might contain merged prices
+    networkId: dbClient.network_id, // Add network_id support
     referralCode: dbClient.referral_code,
     referredBy: dbClient.referred_by,
     asaasCustomerId: dbClient.asaas_customer_id,
@@ -32,6 +33,46 @@ const mapDbClientToClient = (dbClient: any): Client => ({
     notificationPreferences: dbClient.notification_preferences
 });
 
+// Helper to apply network prices
+const applyNetworkPrices = async (clients: any[]) => {
+    const networkIds = [...new Set(clients.map(c => c.network_id).filter(Boolean))];
+    if (networkIds.length === 0) return clients;
+
+    const { data: prices } = await supabase
+        .from('network_prices')
+        .select('*')
+        .in('network_id', networkIds);
+
+    if (!prices || prices.length === 0) return clients;
+
+    const networkPriceMap: Record<string, Record<string, number>> = {};
+
+    // Group prices by network
+    prices.forEach((p: any) => {
+        if (!networkPriceMap[p.network_id]) {
+            networkPriceMap[p.network_id] = {};
+        }
+        networkPriceMap[p.network_id][p.service_id] = Number(p.price);
+    });
+
+    // Merge for each client
+    return clients.map(client => {
+        if (client.network_id && networkPriceMap[client.network_id]) {
+            // Priority: Client Specific > Network Specific > Standard (Standard is not here)
+            // We are building customPrices map.
+            const networkPrices = networkPriceMap[client.network_id];
+            const clientPrices = client.custom_prices || {};
+
+            // Merge: Network prices act as base defaults for this client, overridden by specific client prices
+            client.custom_prices = {
+                ...networkPrices,
+                ...clientPrices
+            };
+        }
+        return client;
+    });
+};
+
 export const getClients = async (): Promise<Client[]> => {
     const { data: clients, error } = await supabase.from('clients').select('*');
     if (error) {
@@ -39,7 +80,8 @@ export const getClients = async (): Promise<Client[]> => {
         return [];
     }
 
-    return clients.map(mapDbClientToClient);
+    const clientsWithNetwork = await applyNetworkPrices(clients);
+    return clientsWithNetwork.map(mapDbClientToClient);
 };
 
 // ✅ PAGINAÇÃO: Versão paginada para melhor performance
@@ -61,8 +103,9 @@ export const getClientsPaginated = async (
         return { data: [], count: 0 };
     }
 
+    const clientsWithNetwork = await applyNetworkPrices(clients);
     return {
-        data: clients.map(mapDbClientToClient),
+        data: clientsWithNetwork.map(mapDbClientToClient),
         count: count || 0
     };
 };
@@ -97,8 +140,9 @@ export const searchClients = async (
         return { data: [], count: 0 };
     }
 
+    const clientsWithNetwork = await applyNetworkPrices(clients);
     return {
-        data: clients.map(mapDbClientToClient),
+        data: clientsWithNetwork.map(mapDbClientToClient),
         count: count || 0
     };
 };
@@ -111,7 +155,10 @@ export const getClientById = async (id: string): Promise<Client | undefined> => 
 
     if (error || !client) return undefined;
 
-    const mappedClient = mapDbClientToClient(client);
+    // Apply network prices for single client
+    const [processedClient] = await applyNetworkPrices([client]);
+
+    const mappedClient = mapDbClientToClient(processedClient);
     // Map transactions if they exist
     if (client.transactions) {
         mappedClient.transactions = client.transactions.map((t: any) => ({

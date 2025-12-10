@@ -243,7 +243,8 @@ export interface Client {
   dueDay: number; // 1-31
   paymentMethod: string;
   paymentType: 'Pré-pago' | 'Pós-pago';
-  network: string;
+  network_id?: string; // Relation to Network table
+  // network: string; // Deprecated in favor of network_id
   customPrices: Record<string, number>;
   balance: number;
   transactions: WalletTransaction[];
@@ -444,7 +445,16 @@ export type CrmActivityResult = 'SUCCESS' | 'SNOOZE' | 'NO_ANSWER' | 'LOST' | 'D
 export interface Network {
   id: string;
   name: string;
-  color: string;
+  description?: string;
+  created_at?: string;
+}
+
+export interface NetworkPrice {
+  id: string;
+  network_id: string;
+  service_id: string;
+  price: number;
+  created_at: string;
 }
 
 export interface ClientCrmMetrics {

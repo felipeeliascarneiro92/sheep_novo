@@ -106,6 +106,10 @@ export function ManageNetworks() {
         setIsModalOpen(true);
         setActiveTab('prices');
 
+        // Reset state before fetching to avoid stale data
+        setNetworkClients([]);
+        setNetworkPrices([]);
+
         // Fetch details
         try {
             const [prices, clients] = await Promise.all([
@@ -121,8 +125,14 @@ export function ManageNetworks() {
                 email: c.email
             }));
             setNetworkClients(mappedClients);
-        } catch (error) {
-            showToast('Erro ao carregar detalhes da rede.', 'error');
+        } catch (error: any) {
+            console.error('Erro ao carregar detalhes da rede:', error);
+            // Check if error is 400 - Bad Request
+            if (error.status === 400 || (error.code && error.code.startsWith('PGRST'))) {
+                showToast('Erro de conexão com banco de dados (Coluna faltando?).', 'error');
+            } else {
+                showToast('Erro ao carregar detalhes da rede.', 'error');
+            }
         }
     };
 
@@ -130,6 +140,9 @@ export function ManageNetworks() {
         setIsModalOpen(false);
         setSelectedNetwork(null);
         setIsEditMode(false);
+        // Clear state on close too
+        setNetworkClients([]);
+        setNetworkPrices([]);
     };
 
     const handlePriceChange = async (serviceId: string, newPrice: string) => {

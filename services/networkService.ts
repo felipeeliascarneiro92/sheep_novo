@@ -114,7 +114,7 @@ export const networkService = {
     async getClientsInNetwork(networkId: string) {
         const { data, error } = await supabase
             .from('clients')
-            .select('id, name, tradeName, email, phone')
+            .select('id, name, trade_name, email, phone')
             .eq('network_id', networkId);
 
         if (error) throw error;

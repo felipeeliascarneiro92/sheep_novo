@@ -42,7 +42,7 @@ export const initOneSignal = async () => {
             // notifyButton: { enable: true }, // Removido para simplificar e evitar erros de tipo, configure pelo painel do OneSignal
             // Configurações para PWA
             serviceWorkerParam: { scope: '/' },
-            serviceWorkerPath: 'OneSignalSDKWorker.js',
+            serviceWorkerPath: 'sw.js',
         });
 
         console.log("✅ OneSignal inicializado com sucesso!");

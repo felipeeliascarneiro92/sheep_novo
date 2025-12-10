@@ -14,8 +14,12 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.js',
         devOptions: {
-          enabled: true
+          enabled: true,
+          type: 'module',
         },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'sheep_house_logo.png'],
         manifest: {

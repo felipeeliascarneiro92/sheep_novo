@@ -13,12 +13,15 @@ import {
     XIcon,
     SaveIcon,
     SearchIcon,
-    CheckCircleIcon as CheckIcon
+    CheckCircleIcon as CheckIcon,
+    CalendarIcon
 } from './icons';
 import { useToast } from '../contexts/ToastContext';
+import { formatDistanceToNow, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export function ManageNetworks() {
-    const [networks, setNetworks] = useState<Network[]>([]);
+    const [networks, setNetworks] = useState<(Network & { clientCount?: number })[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,9 +30,12 @@ export function ManageNetworks() {
     // States for the Modal
     const [activeTab, setActiveTab] = useState<'prices' | 'clients'>('prices');
     const [networkPrices, setNetworkPrices] = useState<NetworkPrice[]>([]);
-    const [networkClients, setNetworkClients] = useState<Pick<Client, 'id' | 'name' | 'tradeName' | 'email'>[]>([]);
-    const [allClients, setAllClients] = useState<Client[]>([]); // For adding new clients
+    const [networkClients, setNetworkClients] = useState<(Pick<Client, 'id' | 'name' | 'tradeName' | 'email'> & { lastBookingDate?: string })[]>([]);
+
+    // Server-side search states
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState<Client[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
 
     // States for Create/Edit Network
     const [isEditMode, setIsEditMode] = useState(false);
@@ -38,6 +44,27 @@ export function ManageNetworks() {
 
     const { showToast } = useToast();
 
+    // Debounced Search Effect
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (searchTerm.length >= 2) {
+                setIsSearching(true);
+                try {
+                    const { data } = await clientService.searchClients(searchTerm, 1, 20); // Limit to 20 results
+                    setSearchResults(data);
+                } catch (error) {
+                    console.error("Error searching clients:", error);
+                } finally {
+                    setIsSearching(false);
+                }
+            } else {
+                setSearchResults([]);
+            }
+        }, 500); // 500ms delay
+
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
     useEffect(() => {
         loadData();
     }, []);
@@ -45,14 +72,12 @@ export function ManageNetworks() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [networksData, servicesData, clientsData] = await Promise.all([
+            const [networksData, servicesData] = await Promise.all([
                 networkService.getAllNetworks(),
-                getServices(),
-                clientService.getClients()
+                getServices()
             ]);
             setNetworks(networksData);
             setServices(servicesData);
-            setAllClients(clientsData);
         } catch (error) {
             console.error('Error loading data:', error);
             showToast('Erro ao carregar dados.', 'error');
@@ -109,20 +134,24 @@ export function ManageNetworks() {
         // Reset state before fetching to avoid stale data
         setNetworkClients([]);
         setNetworkPrices([]);
+        setSearchTerm('');
+        setSearchResults([]);
 
         // Fetch details
         try {
             const [prices, clients] = await Promise.all([
                 networkService.getNetworkPrices(network.id),
-                networkService.getClientsInNetwork(network.id)
+                networkService.getClientsInNetworkWithStats(network.id)
             ]);
             setNetworkPrices(prices);
-            // Map to correct shape if necessary
+
+            // Map to correct shape
             const mappedClients = clients.map((c: any) => ({
                 id: c.id,
                 name: c.name,
-                tradeName: c.tradeName || c.trade_name, // Handle snake_case if coming raw from DB in networkService
-                email: c.email
+                tradeName: c.tradeName || c.trade_name,
+                email: c.email,
+                lastBookingDate: c.lastBookingDate
             }));
             setNetworkClients(mappedClients);
         } catch (error: any) {
@@ -143,6 +172,8 @@ export function ManageNetworks() {
         // Clear state on close too
         setNetworkClients([]);
         setNetworkPrices([]);
+        setSearchTerm('');
+        setSearchResults([]);
     };
 
     const handlePriceChange = async (serviceId: string, newPrice: string) => {
@@ -174,9 +205,21 @@ export function ManageNetworks() {
         if (!selectedNetwork) return;
         try {
             await networkService.addClientToNetwork(clientId, selectedNetwork.id);
-            const client = allClients.find(c => c.id === clientId);
-            if (client) {
-                setNetworkClients(prev => [...prev, client]);
+            // We need to get the client details from search results to add to the local list
+            const clientToAdd = searchResults.find(c => c.id === clientId);
+            if (clientToAdd) {
+                setNetworkClients(prev => [...prev, {
+                    id: clientToAdd.id,
+                    name: clientToAdd.name,
+                    tradeName: clientToAdd.tradeName,
+                    email: clientToAdd.email,
+                    lastBookingDate: undefined
+                }]);
+                // Update global count locally
+                setNetworks(prev => prev.map(n => n.id === selectedNetwork.id ? { ...n, clientCount: (n.clientCount || 0) + 1 } : n));
+
+                setSearchTerm('');
+                setSearchResults([]);
             }
             showToast('Imobiliária adicionada!', 'success');
         } catch (error) {
@@ -188,18 +231,28 @@ export function ManageNetworks() {
         try {
             await networkService.removeClientFromNetwork(clientId);
             setNetworkClients(prev => prev.filter(c => c.id !== clientId));
+            // Update global count locally
+            setNetworks(prev => prev.map(n => n.id === selectedNetwork?.id ? { ...n, clientCount: Math.max((n.clientCount || 0) - 1, 0) } : n));
             showToast('Imobiliária removida!', 'success');
         } catch (error) {
             showToast('Erro ao remover imobiliária.', 'error');
         }
     };
 
-    // Filter available clients to add (exclude those already in THIS network)
-    const availableClients = allClients.filter(
-        c => !networkClients.some(nc => nc.id === c.id) &&
-            (c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (c.tradeName || '').toLowerCase().includes(searchTerm.toLowerCase()))
-    ).slice(0, 10); // Limit to 10 for performance in dropdown
+    // Filter results to exclude those already in the network
+    const filteredSearchResults = searchResults.filter(
+        c => !networkClients.some(nc => nc.id === c.id)
+    );
+
+    const getRecencyBadge = (date?: string) => {
+        if (!date) return <span className="bg-slate-100 text-slate-500 text-xs px-2 py-1 rounded-full">Sem agendamentos</span>;
+
+        const days = Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 3600 * 24));
+
+        if (days < 30) return <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">Ativo ({days}d)</span>;
+        if (days < 60) return <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-1 rounded-full font-medium">Inativo ({days}d)</span>;
+        return <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full font-medium">Crítico ({days}d)</span>;
+    };
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -228,10 +281,14 @@ export function ManageNetworks() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {networks.map(network => (
-                        <div key={network.id} onClick={() => openModal(network)} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow cursor-pointer group">
+                        <div key={network.id} onClick={() => openModal(network)} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow cursor-pointer group relative">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="p-3 bg-purple-100 rounded-lg text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                                     <BuildingIcon className="w-6 h-6" />
+                                </div>
+                                <div className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
+                                    <UsersIcon className="w-3 h-3" />
+                                    {network.clientCount || 0}
                                 </div>
                             </div>
                             <h3 className="text-xl font-bold text-slate-800 mb-2">{network.name}</h3>
@@ -398,20 +455,23 @@ export function ManageNetworks() {
                                                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                                     <input
                                                         type="text"
-                                                        placeholder="Buscar imobiliária..."
+                                                        placeholder="Buscar imobiliária por nome, telefone ou email..."
                                                         value={searchTerm}
                                                         onChange={e => setSearchTerm(e.target.value)}
                                                         className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all"
                                                     />
                                                     {searchTerm && (
                                                         <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-slate-200 max-h-60 overflow-y-auto z-10">
-                                                            {availableClients.length > 0 ? (
-                                                                availableClients.map(client => (
+                                                            {isSearching ? (
+                                                                <div className="p-4 text-center text-sm text-slate-400 flex items-center justify-center gap-2">
+                                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div> Buscando...
+                                                                </div>
+                                                            ) : filteredSearchResults.length > 0 ? (
+                                                                filteredSearchResults.map(client => (
                                                                     <button
                                                                         key={client.id}
                                                                         onClick={() => {
                                                                             handleAddClient(client.id);
-                                                                            setSearchTerm('');
                                                                         }}
                                                                         className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between group border-b border-slate-50 last:border-0"
                                                                     >
@@ -423,7 +483,9 @@ export function ManageNetworks() {
                                                                     </button>
                                                                 ))
                                                             ) : (
-                                                                <div className="p-4 text-center text-sm text-slate-400">Nenhuma imobiliária encontrada.</div>
+                                                                <div className="p-4 text-center text-sm text-slate-400">
+                                                                    {searchTerm.length < 2 ? 'Digite pelo menos 2 caracteres' : 'Nenhuma imobiliária encontrada.'}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     )}
@@ -441,11 +503,24 @@ export function ManageNetworks() {
                                                         Nenhuma imobiliária vinculada ainda.
                                                     </div>
                                                 ) : (
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    <div className="grid grid-cols-1 gap-3">
                                                         {networkClients.map(client => (
-                                                            <div key={client.id} className="bg-white p-3 rounded-lg border border-slate-200 flex justify-between items-center shadow-sm">
-                                                                <div>
-                                                                    <div className="font-medium text-slate-800 text-sm">{client.tradeName || client.name}</div>
+                                                            <div key={client.id} className="bg-white p-4 rounded-lg border border-slate-200 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="flex flex-col">
+                                                                        <div className="font-medium text-slate-800 text-sm flex items-center gap-2">
+                                                                            {client.tradeName || client.name}
+                                                                            {getRecencyBadge(client.lastBookingDate)}
+                                                                        </div>
+                                                                        <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                                                            {client.email}
+                                                                            {client.lastBookingDate && (
+                                                                                <span className="text-slate-400 border-l border-slate-300 pl-2 ml-1">
+                                                                                    Último pedido: {formatDistanceToNow(parseISO(client.lastBookingDate), { locale: ptBR, addSuffix: true })}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
                                                                 <button
                                                                     onClick={() => handleRemoveClient(client.id)}

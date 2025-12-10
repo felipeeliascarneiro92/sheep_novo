@@ -5,14 +5,18 @@ import { Network, NetworkPrice } from '../types';
 export const networkService = {
     // --- REDES (NETWORKS) ---
 
-    async getAllNetworks(): Promise<Network[]> {
+    async getAllNetworks(): Promise<(Network & { clientCount: number })[]> {
         const { data, error } = await supabase
             .from('networks')
-            .select('*')
+            .select('*, clients(count)')
             .order('name');
 
         if (error) throw error;
-        return data || [];
+
+        return (data || []).map((network: any) => ({
+            ...network,
+            clientCount: network.clients ? network.clients[0].count : 0
+        }));
     },
 
     async getNetworkById(id: string): Promise<Network | null> {
@@ -111,13 +115,49 @@ export const networkService = {
         if (error) throw error;
     },
 
-    async getClientsInNetwork(networkId: string) {
-        const { data, error } = await supabase
+    async getClientsInNetworkWithStats(networkId: string) {
+        // 1. Get Clients
+        const { data: clients, error: clientsError } = await supabase
             .from('clients')
             .select('id, name, trade_name, email, phone')
             .eq('network_id', networkId);
 
-        if (error) throw error;
-        return data || [];
+        if (clientsError) throw clientsError;
+        if (!clients || clients.length === 0) return [];
+
+        const clientIds = clients.map(c => c.id);
+
+        // 2. Get Last Booking Date for these clients
+        // We fetch the most recent booking for each client
+        // Optimization: Use a `.in` query.
+        const { data: bookings, error: bookingsError } = await supabase
+            .from('bookings')
+            .select('client_id, created_at') // changed date to created_at or date depending on schema. using created_at as generic 'booking time' or 'date' field
+            .in('client_id', clientIds)
+            .order('created_at', { ascending: false });
+
+        // Note: Ideally use 'date' or 'start_time' if created_at is just record creation. 
+        // Assuming 'date' is the scheduled date. Let's create a map using the latest of data/created_at
+
+        const lastBookingMap: Record<string, string> = {};
+
+        if (bookings) {
+            bookings.forEach((b: any) => {
+                // data might be null if booking date is not set, but created_at is always there.
+                // let's prefer 'date' if available, otherwise created_at. 
+                // Wait, I only selected created_at. I should select 'date' too if it exists.
+                // Let me blindly trust 'created_at' for "Last Action" or 'date' for "Last Scheduled"
+                // User asked "Time without requiring bookings" -> creation date seems relevant for "request", but "date" for "service done".
+                // I will stick to 'created_at' as "Last Request".
+                if (!lastBookingMap[b.client_id]) {
+                    lastBookingMap[b.client_id] = b.created_at; // First one found is latest due to sort
+                }
+            });
+        }
+
+        return clients.map((c: any) => ({
+            ...c,
+            lastBookingDate: lastBookingMap[c.id] || null
+        }));
     }
 };

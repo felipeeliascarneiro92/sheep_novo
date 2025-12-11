@@ -1,0 +1,35 @@
+043f7756-8de5-471b-8a04-95a54046dc04 | Taxa Flash
+8135b3a4-a2c7-4df4-a3ea-94c0e32daec4 | Vídeo Curto
+796f250d-b16e-4e4f-ae02-05602fcd884a | Fotografia Premium
+db87a074-c6d8-4e9b-bdcb-1a19b8375603 | Deslocamento
+23cc3ee5-5313-4fd4-8bb8-61ad04894c96 | Tour Virtual
+4c5b9800-a77b-41b6-b65b-306ab34fa09d | Fotografia Aérea
+e47eaa44-a2df-4eda-807e-fa290c2a8858 | Vídeo Aéreo
+b8980770-b475-4a84-ab18-fa60e474d495 | Pacote Aéreo (Foto/Vídeo)
+3e96991c-ae12-4139-a99f-8349a4f83f63 | Pacote Completo
+e86d5f73-251b-48e7-a8ed-e635c51fed86 | Remoção de Objetos
+836bf4ef-c7ed-43f6-b855-64613e1d1df8 | Tratamento de Céu (Blue Sky)
+73463a33-6ab0-4837-8458-ac0ab84b4c25 | Móveis Virtuais (Staging)
+58d218dd-2dbe-4a19-9acf-befff88d770f | Vídeo Profissional (Interno)
+c2e85cc0-0870-4b11-8e0b-c20a1ca6e67b | Narração para Vídeo
+898db1eb-577d-4cf7-9322-c5c6214ae303 | Horário Adicional
+c27fa63e-ff10-490f-b8d9-509836a00078 | Demarcação de Terreno
+e8c7179f-a916-468b-aa8c-3f43e052a912 | Multa Cancelamento ( 50%)
+f9282de2-ddc8-4322-a706-3c66011b6ce6 | Multa Cancelamento ( 100%)
+5f4bcec0-4361-4f1f-9ec3-346fdf1901da | Drone (FPV)
+8944241e-fbc5-49d9-838b-078a70c8adfb | Vistoria de Entrada
+c30e3d5e-9983-4e50-9008-b6641aecb22f | Vistoria de Saída
+76183cac-b4b1-4b5a-aaa2-01b0e3ff3c37 | Revistoria
+4ca8a10e-a9a6-4dbb-80d8-a33746b3e678 | Multa Cancelamento ( 100%) - Vistorias
+a99f670b-4b7b-410b-bc20-66258f5e3027 | Multa Cancelamento ( 50%) - Vistorias
+26b30970-a056-4c1f-ab36-a8afa3a16b3c | Vídeo Reels
+312b715d-5bc3-450b-b3e7-838537e8fd2a | Inserção Apolar
+b75c7f22-8391-42a2-b8a3-90e1916ad955 | Colocação de Placa
+14a6b5b5-3ddd-40fd-90d4-0f02fb69bf85 | Edição Reclick.app
+1810897d-b044-4e11-9dcf-0fff4c23002e | Inserção Logo
+fb783156-473c-4f29-b373-de7c7b6177ba | Remover Itens
+28a34dc2-37eb-423e-97ea-97a38252d346 | Limpeza de Ambiente
+bbd1a9d9-0f04-4751-8963-3af2cd16461d | Fotografia Profissional (Old)
+foto_profissional | Fotografia Profissional
+64c962b3-e67b-4250-92c3-1781fe24369a | Retirar Chaves na Imobiliária
+89f36092-0ea5-43ed-add5-3b5b4c1ec267 | Troca de Céu

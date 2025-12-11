@@ -13,7 +13,7 @@ export * from './storageService'; // New export
 
 import { getBookingById, bookingToDb } from './scheduleService';
 import { supabase } from './supabase';
-import { HistoryActor } from '../types';
+import { HistoryActor, PendingService } from '../types';
 import { createBookingFolder } from './storageService';
 import { notifyClientBookingRescheduled, notifyClientBookingCancelled, notifyClientBookingCompleted } from './notificationService';
 import { getClientById } from './clientService';
@@ -69,13 +69,20 @@ export const linkBookingToDropbox = async (bookingId: string, actor: HistoryActo
     return booking;
 };
 
+
+// ... (existing code)
+
 // Updated to ASYNC to handle Drive creation
-export const completeBooking = async (id: string, internalNotes: string, commonAreaId?: string) => {
+export const completeBooking = async (id: string, internalNotes: string, commonAreaId?: string, extraServices?: PendingService[]) => {
     const booking = await getBookingById(id);
     if (booking) {
         booking.status = 'Realizado';
         booking.internalNotes = internalNotes; // Save to internalNotes
         if (commonAreaId) booking.commonAreaId = commonAreaId;
+        if (extraServices && extraServices.length > 0) {
+            booking.pending_services = extraServices;
+            booking.history.push({ timestamp: new Date().toISOString(), actor: 'Fotógrafo', notes: 'Serviços extras reportados' });
+        }
 
         booking.history.push({ timestamp: new Date().toISOString(), actor: 'Fotógrafo', notes: 'Sessão realizada' });
 
@@ -98,6 +105,51 @@ export const completeBooking = async (id: string, internalNotes: string, commonA
 
     }
     return booking!;
+};
+
+export const approvePendingService = async (bookingId: string, serviceIndex: number, actor: HistoryActor) => {
+    const booking = await getBookingById(bookingId);
+    if (!booking || !booking.pending_services || !booking.pending_services[serviceIndex]) return null;
+
+    const pending = booking.pending_services[serviceIndex];
+
+    // Add to real services
+    if (!booking.service_ids.includes(pending.serviceId)) {
+        booking.service_ids.push(pending.serviceId);
+        // Note: Prices are not automatically added here as custom overrides unless we decide to. 
+        // For now, it falls back to standard pricing which calculates correctly in `calculatePayout`.
+    }
+
+    // Remove from pending
+    booking.pending_services.splice(serviceIndex, 1);
+
+    booking.history.push({
+        timestamp: new Date().toISOString(),
+        actor: actor,
+        notes: `Serviço extra aprovado: ${pending.serviceId}`
+    });
+
+    await supabase.from('bookings').update(bookingToDb(booking)).eq('id', booking.id);
+    return booking;
+};
+
+export const rejectPendingService = async (bookingId: string, serviceIndex: number, actor: HistoryActor) => {
+    const booking = await getBookingById(bookingId);
+    if (!booking || !booking.pending_services || !booking.pending_services[serviceIndex]) return null;
+
+    const pending = booking.pending_services[serviceIndex];
+
+    // Remove from pending
+    booking.pending_services.splice(serviceIndex, 1);
+
+    booking.history.push({
+        timestamp: new Date().toISOString(),
+        actor: actor,
+        notes: `Serviço extra rejeitado: ${pending.serviceId}`
+    });
+
+    await supabase.from('bookings').update(bookingToDb(booking)).eq('id', booking.id);
+    return booking;
 };
 
 // ... exports below remain unchanged, re-exporting them to ensure file integrity

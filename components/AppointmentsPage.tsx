@@ -700,9 +700,18 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ user, onViewDetails
     // Filter input states
     const [provider, setProvider] = useState('all');
     const [appointmentStatus, setAppointmentStatus] = useState<BookingStatus | 'all'>('all');
+    const [selectedServiceId, setSelectedServiceId] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+
+    // Default to Today
+    const getTodayStr = () => {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().split('T')[0];
+    };
+
+    const [startDate, setStartDate] = useState(getTodayStr());
+    const [endDate, setEndDate] = useState(getTodayStr());
 
     const [isLoading, setIsLoading] = useState(true);
 
@@ -788,8 +797,15 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ user, onViewDetails
 
     // Simplified Effect: Since server handles filtering, we just pass data to view
     useEffect(() => {
-        setFilteredBookings(allBookings);
-    }, [allBookings]);
+        let filtered = allBookings;
+
+        // Client-side service filtering (until supported by backend)
+        if (selectedServiceId !== 'all') {
+            filtered = filtered.filter(b => b.service_ids.includes(selectedServiceId));
+        }
+
+        setFilteredBookings(filtered);
+    }, [allBookings, selectedServiceId]);
 
     // Helper to get service names
     const getServiceNames = (ids: string[]) => {
@@ -906,13 +922,21 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ user, onViewDetails
             </div>
 
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                     <div className={(user.role === 'admin' || user.role === 'editor') ? '' : 'md:col-span-2'}>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Buscar</label>
                         <div className="relative">
                             <input type="search" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Busca por cliente ou endereço..." className="w-full p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition-colors pl-10" />
                             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500" />
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Serviço</label>
+                        <select value={selectedServiceId} onChange={e => setSelectedServiceId(e.target.value)} className="w-full p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg shadow-sm focus:ring-purple-500 focus:border-purple-500 transition-colors">
+                            <option value="all">Todos os Serviços</option>
+                            {allServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
                     </div>
 
                     <div>
@@ -987,25 +1011,33 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ user, onViewDetails
                         return (
                             <div key={booking.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in group">
                                 {/* Header: Date & Status */}
-                                <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                                <div className="bg-slate-50 dark:bg-slate-900/50 px-4 md:px-6 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap justify-between items-center gap-2">
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-semibold">
                                             <CalendarIcon className="w-4 h-4 text-purple-500" />
-                                            <span>{bookingDate ? bookingDate.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long' }) : 'Data a definir'}</span>
+                                            <span className="capitalize">
+                                                {bookingDate ? bookingDate.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long' }) : 'Data a definir'}
+                                            </span>
                                         </div>
-                                        <div className="h-4 w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                                        <div className="hidden md:block h-4 w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
                                         <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm">
                                             <ClockIcon className="w-4 h-4" />
-                                            <span>{booking.start_time ? `${booking.start_time} - ${booking.end_time}` : 'Horário a definir'}</span>
+                                            <span>
+                                                {booking.start_time
+                                                    ? `${booking.start_time}${booking.end_time && booking.end_time !== 'null' ? ` - ${booking.end_time}` : ''}`
+                                                    : 'Horário a definir'}
+                                            </span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">#{booking.legacy_id ? booking.legacy_id : booking.id.slice(0, 6)}</span>
+                                    <div className="flex items-center gap-2 ml-auto md:ml-0">
+                                        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 hidden sm:inline" title={booking.id}>
+                                            #{booking.legacy_id || booking.id.slice(0, 6)}
+                                        </span>
                                         <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${statusStyles[booking.status]} `}>{booking.status}</span>
                                     </div>
                                 </div>
 
-                                <div className="p-6">
+                                <div className="p-4 md:p-6">
                                     <div className="flex flex-col md:flex-row justify-between gap-6">
                                         {/* Main Info */}
                                         <div className="flex-1 space-y-4">
@@ -1023,16 +1055,18 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ user, onViewDetails
                                                 </h3>
                                                 <div className="flex items-start gap-2 mt-1 text-slate-600 dark:text-slate-400 text-sm">
                                                     <MapPinIcon className="w-4 h-4 mt-0.5 flex-shrink-0 text-slate-400" />
-                                                    <span>{booking.address}</span>
+                                                    <span className="line-clamp-2 md:line-clamp-none">
+                                                        {booking.address ? booking.address.replace(/- undefined/g, '').replace(/undefined/g, '') : 'Endereço não informado'}
+                                                    </span>
                                                 </div>
                                             </div>
 
                                             {/* Services & Photographer */}
-                                            <div className="flex flex-wrap gap-4 items-center pt-2">
-                                                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-600">
+                                            <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:items-center pt-2">
+                                                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-600 w-fit">
                                                     <CameraIcon className="w-4 h-4 text-purple-500" />
-                                                    <span className="font-medium">Profissional:</span>
-                                                    <span>{getPhotographerName(booking)}</span>
+                                                    <span className="font-medium">Prof:</span>
+                                                    <span className="truncate max-w-[150px]">{getPhotographerName(booking)}</span>
                                                 </div>
 
                                                 <div className="flex flex-wrap gap-2">
@@ -1050,12 +1084,14 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ user, onViewDetails
                                         </div>
 
                                         {/* Price & Actions */}
-                                        <div className="flex flex-col justify-between items-end gap-4 min-w-[200px]">
-                                            <div className="text-right">
-                                                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Valor Total</p>
-                                                <p className="text-2xl font-bold gradient-text">R$ {displayPrice.toFixed(2)}</p>
+                                        <div className="flex flex-row md:flex-col justify-between md:justify-start items-center md:items-end gap-4 border-t md:border-t-0 border-slate-100 dark:border-slate-700 pt-4 md:pt-0">
+                                            <div className="text-left md:text-right">
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Valor Total</p>
+                                                <p className="text-xl md:text-2xl font-bold gradient-text">R$ {displayPrice.toFixed(2)}</p>
                                             </div>
-                                            <ActionButtons booking={booking} />
+                                            <div className="flex-1 md:flex-none flex justify-end">
+                                                <ActionButtons booking={booking} />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

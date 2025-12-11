@@ -83,6 +83,14 @@ export interface Booking {
   dropboxFolderId?: string;
   dropboxFolderLink?: string;
   dropboxUploadLink?: string; // New field for photographer upload link
+  pending_services?: PendingService[];
+}
+
+export interface PendingService {
+  serviceId: string;
+  notes?: string;
+  addedBy: string;
+  timestamp: string;
 }
 
 export interface DriveFile {

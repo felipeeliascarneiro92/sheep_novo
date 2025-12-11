@@ -54,6 +54,7 @@ export const bookingToDb = (booking: Booking) => {
         dropbox_folder_id: booking.dropboxFolderId,
         google_drive_folder_link: booking.dropboxFolderLink, // Map to DB column
         dropbox_upload_link: booking.dropboxUploadLink,
+        pending_services: booking.pending_services,
         history: booking.history,
         created_at: booking.createdAt
     };
@@ -103,7 +104,8 @@ export const bookingFromDb = (db: any): Booking => {
         asaasPixQrCodeUrl: db.asaas_pix_qr_code_url,
         dropboxFolderId: db.dropbox_folder_id,
         dropboxFolderLink: db.google_drive_folder_link || db.dropbox_folder_link, // Support both for migration
-        dropboxUploadLink: db.dropbox_upload_link
+        dropboxUploadLink: db.dropbox_upload_link,
+        pending_services: db.pending_services || []
     };
 };
 

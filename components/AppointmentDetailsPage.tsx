@@ -5,10 +5,11 @@ import {
     completeBooking, getCommonAreas, uploadMaterialForBooking, getBrokerById,
     getPhotographerPayoutForBooking, generateMarketingDescription, getServices,
     getContextualUpsells, addTipToBooking, updateKeyStatus, updateBookingObservations,
-    linkBookingToDropbox, getBookingPhotos, getClientById
+    linkBookingToDropbox, getBookingPhotos, getClientById,
+    approvePendingService, rejectPendingService
 } from '../services/bookingService';
 import { sendBookingConfirmation, sendRescheduleNotification, sendPhotographerEnRoute, sendMaterialReady } from '../services/whatsappService';
-import { Booking, Service, Photographer, CommonArea, Broker, DriveFile, Client } from '../types';
+import { Booking, Service, Photographer, CommonArea, Broker, DriveFile, Client, PendingService } from '../types';
 import {
     ArrowLeftIcon, CalendarIcon, ClockIcon, MapPinIcon, CameraIcon, UserIcon,
     DollarSignIcon, HistoryIcon, XCircleIcon, AlertTriangleIcon, CheckCircleIcon, UploadCloudIcon,
@@ -138,11 +139,16 @@ const TipModal: React.FC<{ onClose: () => void; onConfirm: (amount: number) => v
     )
 }
 
-const CompleteBookingModal: React.FC<{ commonAreas: CommonArea[]; onClose: () => void; onConfirm: (notes: string, commonAreaId?: string) => void; }> = ({ commonAreas, onClose, onConfirm }) => {
+const CompleteBookingModal: React.FC<{ commonAreas: CommonArea[]; services: Service[]; onClose: () => void; onConfirm: (notes: string, commonAreaId?: string, extraServices?: PendingService[]) => void; }> = ({ commonAreas, services, onClose, onConfirm }) => {
     const [notes, setNotes] = useState('');
     const [selectedAreaId, setSelectedAreaId] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    // Extra Services State
+    const [addedServices, setAddedServices] = useState<PendingService[]>([]);
+    const [selectedServiceToAdd, setSelectedServiceToAdd] = useState('');
+
     const [isSubmitting, setIsSubmitting] = useState(false); // New state
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -179,9 +185,27 @@ const CompleteBookingModal: React.FC<{ commonAreas: CommonArea[]; onClose: () =>
 
     const handleConfirm = () => {
         setIsSubmitting(true);
-        onConfirm(notes, selectedAreaId || undefined);
+        onConfirm(notes, selectedAreaId || undefined, addedServices);
         // Modal will be closed by parent after processing
     }
+
+    const handleAddService = () => {
+        if (!selectedServiceToAdd) return;
+        const service = services.find(s => s.id === selectedServiceToAdd);
+        if (service) {
+            setAddedServices(prev => [...prev, {
+                serviceId: service.id,
+                addedBy: 'Photographer',
+                timestamp: new Date().toISOString(),
+                notes: 'Adicionado no encerramento'
+            }]);
+            setSelectedServiceToAdd('');
+        }
+    };
+
+    const handleRemoveService = (index: number) => {
+        setAddedServices(prev => prev.filter((_, i) => i !== index));
+    };
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in-fast p-4" onClick={onClose}>
@@ -247,6 +271,44 @@ const CompleteBookingModal: React.FC<{ commonAreas: CommonArea[]; onClose: () =>
                             </div>
                         )}
                     </div>
+                </div>
+
+                <div className="mt-4 border-t border-slate-100 dark:border-slate-700 pt-4">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Serviços Adicionais Realizados (Extra)</label>
+                    <div className="flex gap-2 mb-2">
+                        <select
+                            value={selectedServiceToAdd}
+                            onChange={e => setSelectedServiceToAdd(e.target.value)}
+                            className="flex-1 p-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg text-sm"
+                        >
+                            <option value="">Selecione um serviço...</option>
+                            {services.filter(s => !addedServices.find(as => as.serviceId === s.id)).map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={handleAddService}
+                            className="bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-2 rounded-lg text-sm font-bold"
+                        >
+                            Adicionar
+                        </button>
+                    </div>
+
+                    {addedServices.length > 0 && (
+                        <ul className="space-y-2 mt-2 bg-slate-50 dark:bg-slate-900 p-2 rounded-lg">
+                            {addedServices.map((s, index) => {
+                                const svc = services.find(srv => srv.id === s.serviceId);
+                                return (
+                                    <li key={index} className="flex justify-between items-center text-sm p-2 bg-white dark:bg-slate-800 rounded shadow-sm border border-slate-200 dark:border-slate-700">
+                                        <span className="text-slate-700 dark:text-slate-200">{svc?.name || s.serviceId}</span>
+                                        <button onClick={() => handleRemoveService(index)} className="text-red-500 hover:text-red-700"><XCircleIcon className="w-4 h-4" /></button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                    <p className="text-[10px] text-slate-500 mt-1">* Esses serviços serão enviados para aprovação do administrador.</p>
                 </div>
 
                 <div className="mt-8 flex flex-col sm:flex-row-reverse gap-3">
@@ -412,9 +474,9 @@ const AppointmentDetailsPage: React.FC<AppointmentDetailsPageProps> = ({ booking
     }
 
     // UPDATED: Async handling for completion + drive creation
-    const handleConfirmComplete = async (notes: string, commonAreaId?: string) => {
+    const handleConfirmComplete = async (notes: string, commonAreaId?: string, extraServices?: PendingService[]) => {
         // Booking completion is now async to handle Dropbox creation
-        const updatedBooking = await completeBooking(bookingId, notes, commonAreaId);
+        const updatedBooking = await completeBooking(bookingId, notes, commonAreaId, extraServices);
         setBooking(updatedBooking);
         setIsCompleteModalOpen(false);
 
@@ -570,7 +632,7 @@ const AppointmentDetailsPage: React.FC<AppointmentDetailsPageProps> = ({ booking
             {isCancelModalOpen && <CancelModal booking={booking} user={user} onConfirm={handleConfirmCancel} onClose={() => setIsCancelModalOpen(false)} onOptimisticUpdate={handleOptimisticUpdate} />}
             {isRescheduleModalOpen && <RescheduleModal booking={booking} onConfirm={() => { refreshBooking(); setIsRescheduleModalOpen(false); }} onClose={() => setIsRescheduleModalOpen(false)} />}
             {isEditServicesModalOpen && <EditServicesModal booking={booking} user={user} onConfirm={() => { refreshBooking(); setIsEditServicesModalOpen(false); }} onClose={() => setIsEditServicesModalOpen(false)} />}
-            {isCompleteModalOpen && <CompleteBookingModal commonAreas={commonAreas} onClose={() => setIsCompleteModalOpen(false)} onConfirm={handleConfirmComplete} />}
+            {isCompleteModalOpen && <CompleteBookingModal commonAreas={commonAreas} services={services} onClose={() => setIsCompleteModalOpen(false)} onConfirm={handleConfirmComplete} />}
 
             {showDescriptionModal && <DescriptionModal text={generatedDescription} onClose={() => setShowDescriptionModal(false)} />}
             {isTipModalOpen && <TipModal onClose={() => setIsTipModalOpen(false)} onConfirm={handleConfirmTip} />}
@@ -609,6 +671,54 @@ const AppointmentDetailsPage: React.FC<AppointmentDetailsPageProps> = ({ booking
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                {/* PENDING SERVICES APPROVAL BLOCK (ADMIN/EDITOR ONLY) */}
+                {(isAdminOrEditor && booking.pending_services && booking.pending_services.length > 0) && (
+                    <div className="lg:col-span-3 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6 shadow-sm animate-pulse-slow relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400"></div>
+                        <h3 className="text-lg font-bold text-yellow-800 dark:text-yellow-200 mb-2 flex items-center gap-2">
+                            <AlertTriangleIcon className="w-5 h-5" /> Aprovação Necessária: Serviços Extras
+                        </h3>
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-4">
+                            O fotógrafo reportou serviços adicionais realizados nesta sessão.
+                        </p>
+                        <div className="space-y-3">
+                            {booking.pending_services.map((pending, index) => {
+                                const svc = services.find(s => s.id === pending.serviceId);
+                                return (
+                                    <div key={index} className="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-900">
+                                        <div>
+                                            <p className="font-bold text-slate-800 dark:text-slate-200">{svc?.name || pending.serviceId}</p>
+                                            <p className="text-xs text-slate-500">Adicionado em: {new Date(pending.timestamp).toLocaleString()}</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={async () => {
+                                                    if (window.confirm('Rejeitar este serviço extra?')) {
+                                                        const updated = await rejectPendingService(bookingId, index, user.role === 'admin' ? 'Admin' : 'Editor');
+                                                        if (updated) setBooking(updated);
+                                                    }
+                                                }}
+                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg border border-red-200 text-xs font-bold flex items-center gap-1"
+                                            >
+                                                <XCircleIcon className="w-4 h-4" /> Rejeitar
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    const updated = await approvePendingService(bookingId, index, user.role === 'admin' ? 'Admin' : 'Editor');
+                                                    if (updated) setBooking(updated);
+                                                }}
+                                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg border border-green-200 text-xs font-bold flex items-center gap-1"
+                                            >
+                                                <CheckCircleIcon className="w-4 h-4" /> Aprovar
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
                 {/* Left Column: Main Info */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">

@@ -2,7 +2,7 @@
 
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { getClients, getClientById, addFunds } from '../services/bookingService';
+import { getClientById, addFunds, searchClients } from '../services/bookingService';
 import { Client, WalletTransaction } from '../types';
 import { User } from '../App';
 import { WalletIcon, TrendingUpIcon, ArrowUpRightIcon, ArrowDownLeftIcon, SearchIcon, PlusIcon, DollarSignIcon, ClockIcon } from './icons';
@@ -21,6 +21,7 @@ const WalletPage: React.FC<WalletPageProps> = ({ user }) => {
     // Search state for admin
     const [searchTerm, setSearchTerm] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
 
     // For adding funds simulation (Admin/Manual)
     const [isAddFundsModalOpen, setIsAddFundsModalOpen] = useState(false);
@@ -34,10 +35,7 @@ const WalletPage: React.FC<WalletPageProps> = ({ user }) => {
 
     useEffect(() => {
         const fetchInitialData = async () => {
-            if (user.role === 'admin') {
-                const fetchedClients = await getClients();
-                setClients(fetchedClients);
-            } else {
+            if (user.role !== 'admin') {
                 const client = await getClientById(user.id);
                 if (client) setSelectedClient(client);
             }
@@ -45,13 +43,40 @@ const WalletPage: React.FC<WalletPageProps> = ({ user }) => {
         fetchInitialData();
     }, [user]);
 
+    // Server-side Search Effect
+    useEffect(() => {
+        if (user.role !== 'admin') return;
+
+        const delayDebounceFn = setTimeout(async () => {
+            if (searchTerm.trim()) {
+                setIsSearching(true);
+                try {
+                    const { data } = await searchClients(searchTerm, 1, 10);
+                    setClients(data);
+                } catch (error) {
+                    console.error("Error searching clients:", error);
+                    setClients([]);
+                } finally {
+                    setIsSearching(false);
+                }
+            } else {
+                setClients([]);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchTerm, user.role]);
+
     useEffect(() => {
         const fetchSelectedClient = async () => {
             if (user.role === 'admin' && selectedClientId) {
                 const client = await getClientById(selectedClientId);
                 if (client) {
                     setSelectedClient(client);
-                    setSearchTerm(client.name); // Populate input with selected name
+                    // Do not update searchTerm here to avoid triggering search again or loop
+                    // But we might want to keep the name in the box?
+                    // Usually selecting sets the "value" of the input.
+                    setSearchTerm(client.name);
                 }
             }
         };
@@ -99,12 +124,6 @@ const WalletPage: React.FC<WalletPageProps> = ({ user }) => {
         }
     };
 
-    const filteredClients = useMemo(() => {
-        if (!searchTerm) return clients;
-        const lower = searchTerm.toLowerCase();
-        return clients.filter(c => c.name.toLowerCase().includes(lower));
-    }, [clients, searchTerm]);
-
     // Sort transactions by date desc
     const sortedTransactions = useMemo(() => {
         if (!selectedClient || !selectedClient.transactions) return [];
@@ -123,6 +142,7 @@ const WalletPage: React.FC<WalletPageProps> = ({ user }) => {
         if (e.target.value === '') {
             setSelectedClientId('');
             setSelectedClient(null);
+            setClients([]);
         }
     };
 
@@ -149,8 +169,10 @@ const WalletPage: React.FC<WalletPageProps> = ({ user }) => {
                         />
                         {isDropdownOpen && searchTerm && (
                             <ul className="absolute z-10 w-full bg-white border border-slate-300 rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
-                                {filteredClients.length > 0 ? (
-                                    filteredClients.map(c => (
+                                {isSearching ? (
+                                    <li className="p-3 text-sm text-slate-500 text-center">Buscando...</li>
+                                ) : clients.length > 0 ? (
+                                    clients.map(c => (
                                         <li key={c.id}>
                                             <button
                                                 className="w-full text-left p-3 hover:bg-slate-100 flex justify-between items-center"

@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { getCoupons, addCoupon, deleteCoupon, getServices } from '../services/bookingService';
+import { getCoupons, addCoupon, deleteCoupon, toggleCouponStatus, getServices } from '../services/bookingService';
 import { Coupon, CouponType, Service } from '../types';
-import { TicketIcon, PlusIcon, SearchIcon, XIcon, CloudRainIcon } from './icons';
+import { TicketIcon, PlusIcon, SearchIcon, XIcon, CloudRainIcon, CheckCircleIcon, XCircleIcon } from './icons';
 
 const emptyCouponForm: Omit<Coupon, 'id' | 'usedCount' | 'usedByClientIds'> = {
     code: '',
@@ -47,6 +47,11 @@ const CouponsPage: React.FC = () => {
             await deleteCoupon(id);
             await refreshCoupons();
         }
+    };
+
+    const handleToggleStatus = async (id: string, currentStatus: boolean) => {
+        await toggleCouponStatus(id, currentStatus);
+        await refreshCoupons();
     };
 
     const handleRainCoupon = async () => {
@@ -125,11 +130,31 @@ const CouponsPage: React.FC = () => {
 
                         return (
                             <div key={coupon.id} className={`p-5 rounded-xl border relative overflow-hidden ${isActive ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200 opacity-75'}`}>
-                                <div className="flex justify-between items-start mb-2">
+                                <div className="flex justify-between items-start mb-4">
                                     <div className="bg-slate-100 p-2 rounded-lg">
                                         <TicketIcon className={`w-6 h-6 ${isActive ? 'text-purple-600' : 'text-slate-400'}`} />
                                     </div>
-                                    <button onClick={() => handleDelete(coupon.id)} className="text-slate-400 hover:text-red-500"><XIcon className="w-5 h-5" /></button>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`px-2 py-1 rounded text-xs font-bold mr-1 ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                            {isActive ? 'ATIVO' : isExpired ? 'EXPIRADO' : isDepleted ? 'ESGOTADO' : 'INATIVO'}
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => handleToggleStatus(coupon.id, coupon.isActive)}
+                                                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                                                title={coupon.isActive ? "Desativar" : "Ativar"}
+                                            >
+                                                {coupon.isActive ? <XCircleIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5 text-green-500" />}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(coupon.id)}
+                                                className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+                                                title="Excluir"
+                                            >
+                                                <XIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <h3 className="text-xl font-bold text-slate-800 tracking-wide">{coupon.code}</h3>
                                 <p className="text-sm font-semibold text-green-600 mb-3">
@@ -140,10 +165,6 @@ const CouponsPage: React.FC = () => {
                                     <p>Validade: {new Date(coupon.expirationDate).toLocaleDateString('pt-BR')}</p>
                                     <p>Usos: {coupon.usedCount} / {coupon.maxUses}</p>
                                     {coupon.serviceRestrictionId && <p className="truncate">Restrito a: {services.find(s => s.id === coupon.serviceRestrictionId)?.name}</p>}
-                                </div>
-
-                                <div className={`absolute top-4 right-4 px-2 py-1 rounded text-xs font-bold ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                    {isActive ? 'ATIVO' : isExpired ? 'EXPIRADO' : isDepleted ? 'ESGOTADO' : 'INATIVO'}
                                 </div>
                             </div>
                         );

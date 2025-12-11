@@ -210,7 +210,7 @@ export const generateMonthlyInvoices = async (): Promise<AdminInvoice[]> => {
 
             try {
                 if (asaasId && !asaasId.startsWith('cus_error')) {
-                    chargeData = await createAsaasCharge(
+                    const result = await createAsaasCharge(
                         asaasId,
                         totalAmount,
                         dueDateStr,
@@ -218,6 +218,10 @@ export const generateMonthlyInvoices = async (): Promise<AdminInvoice[]> => {
                         'BOLETO',
                         `monthly_${client.id}_${monthLabel}`
                     );
+                    chargeData = {
+                        ...result,
+                        bankSlipUrl: result.bankSlipUrl || ''
+                    };
                 }
             } catch (e) {
                 console.error(`Failed to create Asaas charge for ${client.name}`, e);
@@ -423,6 +427,10 @@ export const addCoupon = async (data: Omit<Coupon, 'id' | 'usedCount' | 'usedByC
 
 export const deleteCoupon = async (id: string) => {
     await supabase.from('coupons').delete().eq('id', id);
+};
+
+export const toggleCouponStatus = async (id: string, currentStatus: boolean) => {
+    await supabase.from('coupons').update({ is_active: !currentStatus }).eq('id', id);
 };
 
 export const validateCoupon = async (code: string, clientId: string, total: number, serviceIds: string[]): Promise<{ valid: boolean, message: string, discountAmount: number }> => {

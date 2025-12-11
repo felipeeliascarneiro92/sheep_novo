@@ -14,7 +14,7 @@ export const seedDatabase = async () => {
             { id: 'drone', name: 'Imagens Aéreas (Drone)', duration_minutes: 30, price: 200.00, category: 'Aéreo', description: 'Fotos e vídeos aéreos' },
             { id: 'tour_360', name: 'Tour Virtual 360°', duration_minutes: 45, price: 300.00, category: 'Outros', description: 'Tour interativo 360 graus' },
             { id: 'planta_baixa', name: 'Planta Baixa Humanizada', duration_minutes: 30, price: 150.00, category: 'Outros', description: 'Desenho técnico humanizado' },
-            { id: 'deslocamento', name: 'Taxa de Deslocamento', duration_minutes: 0, price: 50.00, category: 'Outros', description: 'Taxa para locais distantes', is_visible_to_client: false },
+            { id: 'deslocamento', name: 'Taxa de Deslocamento', duration_minutes: 0, price: 40.00, category: 'Outros', description: 'Taxa para locais distantes', is_visible_to_client: false },
             { id: 'taxa_flash', name: 'Taxa Flash', duration_minutes: 0, price: 80.00, category: 'Outros', description: 'Taxa para agendamento imediato', is_visible_to_client: false },
         ];
         const { error } = await supabase.from('services').insert(services);

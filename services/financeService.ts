@@ -281,6 +281,20 @@ export const generateMonthlyInvoices = async (): Promise<AdminInvoice[]> => {
             import('./emailService').then(({ sendNewInvoice }) => {
                 sendNewInvoice(client, newInvoice.asaasInvoiceUrl || '', totalAmount, dueDateStr, `Fatura Mensal - ${monthLabel}`).catch(console.error);
             });
+
+            // 📲 WhatsApp Notification
+            if (client.phone) {
+                import('./whatsappService').then(({ sendInvoiceNotification }) => {
+                    sendInvoiceNotification(
+                        client.name,
+                        client.phone,
+                        monthLabel,
+                        totalAmount,
+                        newInvoice.asaasInvoiceUrl || '',
+                        newInvoice.asaasBankSlipUrl || ''
+                    ).catch(console.error);
+                });
+            }
         }
     }
 

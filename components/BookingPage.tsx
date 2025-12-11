@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { loadGoogleMapsScript, getAvailableSlots, createBooking, getServices, getClientById, confirmPrepaidBooking, getBrokersForClient, NEGATIVE_BALANCE_LIMIT, findNearestAvailablePhotographer, getBookingDuration, validateCoupon } from '../services/bookingService';
+import { loadGoogleMapsScript, getAvailableSlots, createBooking, getServices, getClientById, confirmPrepaidBooking, getBrokersForClient, NEGATIVE_BALANCE_LIMIT, findNearestAvailablePhotographer, getBookingDuration, validateCoupon, getPhotographerById } from '../services/bookingService';
 import { createAsaasCharge, createAsaasCustomer, cancelAsaasCharge } from '../services/asaasService';
 import { supabase } from '../services/supabase';
 import { Service, Booking, ServiceCategory, Broker, Client } from '../types';
@@ -531,16 +531,20 @@ const BookingPage: React.FC<BookingPageProps> = ({ user, mode, onBookingSuccess 
         // Actually, I should fix initData to store all services.
 
         const hiddenIds = ['deslocamento', 'taxa_flash'];
-        // This logic was relying on synchronous getServices(). 
-        // I will comment it out and rely on allServices having them if I update initData.
-        /*
         hiddenIds.forEach(hiddenId => {
             if (selectedServiceIds.includes(hiddenId) && !services.find(s => s.id === hiddenId)) {
-                const hiddenService = getServices().find(s => s.id === hiddenId);
-                if(hiddenService) services.push(hiddenService);
+                // Manually add missing service with default fallbacks
+                services.push({
+                    id: hiddenId,
+                    name: hiddenId === 'deslocamento' ? 'Taxa de Deslocamento' : 'Taxa Flash',
+                    price: hiddenId === 'deslocamento' ? 40.00 : 80.00,
+                    duration_minutes: 0,
+                    category: 'Outros',
+                    status: 'Ativo',
+                    isVisibleToClient: false
+                });
             }
         });
-        */
 
         // Temporary fix: If hidden service is selected but not in services, we create a dummy one or we need to ensure they are in allServices.
         // I'll update initData in next step to fetch ALL services.
@@ -630,58 +634,7 @@ const BookingPage: React.FC<BookingPageProps> = ({ user, mode, onBookingSuccess 
         }
     }
 
-    const handleConfirmBooking = async () => {
-        if (!bookingDetailsToConfirm || !selectedLocation) {
-            alert("Erro: detalhes da reserva incompletos.");
-            return;
-        }
-        const { slot } = bookingDetailsToConfirm;
-        const brokerName = isAccompanied === 'yes' ? (selectedBroker === 'outro' ? customBrokerName : selectedBroker) : undefined;
 
-        const isPrePaid = client?.paymentType === 'Pré-pago';
-        // Determine forced status
-        let forcedStatus: 'Confirmado' | undefined = undefined;
-        if (isPrePaid && paymentChoice === 'pay_later') {
-            forcedStatus = 'Confirmado';
-        }
-
-        // Include addons in service IDs list for processing
-        const finalServiceIds = [...selectedServiceIds, ...addons];
-
-        const booking = await createBooking(
-            finalServiceIds,
-            isFlashMode ? new Date().toISOString().split('T')[0] : selectedDate.toISOString().split('T')[0],
-            slot,
-            address,
-            selectedLocation,
-            isAccompanied === 'yes',
-            brokerName,
-            unitDetails,
-            user.clientId,
-            user.role === 'broker' ? user.id : undefined,
-            forcedStatus,
-            isFlashMode, // Pass flash flag
-            appliedCoupon?.code // Pass coupon code if applied
-        );
-
-        setIsConfirmationModalOpen(false);
-        setBookingDetailsToConfirm(null);
-
-        if (booking) {
-            // Flash bookings usually require immediate confirmation, but we respect payment flow
-            const deficit = isPrePaid && client ? Math.max(0, finalPrice - client.balance) : 0;
-
-            if (booking.status === 'Pendente') {
-                const amountToPay = deficit > 0 ? deficit : finalPrice;
-                setPaymentModalBooking({ booking, amount: amountToPay });
-            } else {
-                // Success! Redirect to details
-                onBookingSuccess(booking.id);
-            }
-        } else {
-            alert(isFlashMode ? "Erro ao confirmar o agendamento Flash. Tente novamente." : "Não foi possível criar o agendamento.");
-        }
-    };
 
     const handlePaymentConfirmed = async () => {
         if (!paymentModalBooking) return;
@@ -728,8 +681,160 @@ const BookingPage: React.FC<BookingPageProps> = ({ user, mode, onBookingSuccess 
 
     const hasKeyPickup = selectedServiceIds.includes('retirar_chaves');
 
+    const [bookingSuccessData, setBookingSuccessData] = useState<Booking | null>(null);
+
+    // --- LOADING & SUCCESS STATES ---
+    const [isProcessingBooking, setIsProcessingBooking] = useState(false);
+    const [whatsappLink, setWhatsappLink] = useState('');
+
+
+
+    const handleConfirmBooking = async () => {
+        if (!bookingDetailsToConfirm || !selectedLocation) {
+            alert("Erro: detalhes da reserva incompletos.");
+            return;
+        }
+
+        setIsConfirmationModalOpen(false);
+        setIsProcessingBooking(true);
+
+        // Artificial delay for "nice animation" sensation if request is too fast
+        const startTime = Date.now();
+
+        try {
+            const { slot } = bookingDetailsToConfirm;
+            const brokerName = isAccompanied === 'yes' ? (selectedBroker === 'outro' ? customBrokerName : selectedBroker) : undefined;
+            const isPrePaid = client?.paymentType === 'Pré-pago';
+            let forcedStatus: 'Confirmado' | undefined = undefined;
+            if (isPrePaid && paymentChoice === 'pay_later') {
+                forcedStatus = 'Confirmado';
+            }
+
+            const finalServiceIds = [...selectedServiceIds, ...addons];
+
+            const booking = await createBooking(
+                finalServiceIds,
+                isFlashMode ? new Date().toISOString().split('T')[0] : selectedDate.toISOString().split('T')[0],
+                slot,
+                address,
+                selectedLocation,
+                isAccompanied === 'yes',
+                brokerName,
+                unitDetails,
+                user.clientId,
+                user.role === 'broker' ? user.id : undefined,
+                forcedStatus,
+                isFlashMode,
+                appliedCoupon?.code
+            );
+
+            // Ensure at least 1.5s of loading animation
+            const elapsed = Date.now() - startTime;
+            if (elapsed < 1500) await new Promise(r => setTimeout(r, 1500 - elapsed));
+
+            if (booking) {
+                // Fetch Photographer Details for WhatsApp Message
+                let photographerRg = '';
+                let photographerName = 'A definir';
+                if (booking.photographer_id) {
+                    try {
+                        const p = await getPhotographerById(booking.photographer_id);
+                        if (p) {
+                            photographerRg = p.rg;
+                            photographerName = p.name;
+                        }
+                    } catch (e) { console.error('Error fetching photographer', e); }
+                } else if (booking.photographer_name) {
+                    photographerName = booking.photographer_name;
+                }
+
+                // Construct WhatsApp Message
+                const phone = "5541999999999";
+                const dateFormatted = new Date(booking.date + 'T' + booking.start_time).toLocaleString('pt-BR');
+                const msg = `Olá! Realizei um novo agendamento.\n\n` +
+                    `Data: ${dateFormatted}\n` +
+                    `Fotógrafo: ${photographerName}\n` +
+                    `RG: ${photographerRg || 'N/A'}\n` +
+                    `Local: ${booking.address}`;
+
+                setWhatsappLink(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
+
+                const deficit = isPrePaid && client ? Math.max(0, finalPrice - client.balance) : 0;
+
+                if (booking.status === 'Pendente' && deficit > 0) {
+                    // Go to Payment Flow
+                    setIsProcessingBooking(false);
+                    setPaymentModalBooking({ booking, amount: deficit });
+                } else {
+                    // Success! Show Success Modal
+                    setIsProcessingBooking(false);
+                    setBookingSuccessData(booking);
+                }
+            } else {
+                setIsProcessingBooking(false);
+                alert(isFlashMode ? "Erro ao confirmar o agendamento Flash. Tente novamente." : "Não foi possível criar o agendamento.");
+            }
+        } catch (error) {
+            console.error(error);
+            setIsProcessingBooking(false);
+            alert("Ocorreu um erro inesperado.");
+        }
+    };
+
     return (
         <div className="space-y-8 animate-fade-in">
+            {/* --- LOADING MODAL --- */}
+            {isProcessingBooking && (
+                <div className="fixed inset-0 bg-white/90 dark:bg-slate-900/90 flex flex-col items-center justify-center z-[60] animate-fade-in backdrop-blur-sm">
+                    <div className="relative">
+                        <div className="w-24 h-24 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            {/* CAMERA ICON instead of Sparkles */}
+                            <CameraIcon className="w-8 h-8 text-purple-600 animate-pulse" />
+                        </div>
+                    </div>
+                    <h3 className="mt-8 text-2xl font-bold text-slate-800 dark:text-slate-100 animate-pulse">Processando Agendamento...</h3>
+                    <p className="text-slate-500 dark:text-slate-400 mt-2">Estamos confirmando a disponibilidade do fotógrafo.</p>
+                </div>
+            )}
+
+            {/* --- SUCCESS MODAL --- */}
+            {bookingSuccessData && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] animate-fade-in p-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 w-full max-w-md text-center transform transition-all scale-100">
+                        <div className="mx-auto w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6 animate-bounce-slow">
+                            <CheckCircleIcon className="w-10 h-10 text-green-600 dark:text-green-400" />
+                        </div>
+
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Agendamento Realizado!</h2>
+                        <p className="text-slate-600 dark:text-slate-300 mb-8">
+                            Seu agendamento foi confirmado e já notificamos a equipe.
+                        </p>
+
+                        <div className="space-y-3">
+                            <a
+                                href={whatsappLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 w-full bg-[#25D366] hover:bg-[#128C7E] text-white font-bold py-3 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                            >
+                                {/* Simple WhatsApp Icon SVG inline if needed or imported */}
+                                <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                                Enviar Comprovante via WhatsApp
+                            </a>
+
+                            <button
+                                onClick={() => onBookingSuccess(bookingSuccessData.id)} // Proceed to details
+                                className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold py-3 rounded-xl transition-colors"
+                            >
+                                Ver Detalhes do Agendamento
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
             {paymentModalBooking && <PaymentModal booking={paymentModalBooking.booking} user={user} amountToPay={paymentModalBooking.amount} onConfirm={handlePaymentConfirmed} onClose={() => setPaymentModalBooking(null)} />}
 
             {isConfirmationModalOpen && bookingDetailsToConfirm && (
@@ -1165,3 +1270,4 @@ const BookingPage: React.FC<BookingPageProps> = ({ user, mode, onBookingSuccess 
 };
 
 export default BookingPage;
+

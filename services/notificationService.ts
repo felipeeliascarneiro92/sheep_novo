@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { Notification } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { sendPushNotification } from './oneSignalService';
+import { sendBookingConfirmation } from './whatsappService';
 
 export const getNotificationsForUser = async (role: string, userId?: string): Promise<Notification[]> => {
     let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
@@ -168,15 +169,30 @@ const sendClientEmail = async (client: any, subject: string, htmlContent: string
     }
 };
 
+
+
 export const notifyClientBookingCreated = async (booking: any, clientName: string, clientPhone: string) => {
     const time = booking.start_time || booking.time || 'Horário a definir';
-    const message = `Olá *${clientName}*! 👋\n\nSeu agendamento foi confirmado com sucesso! 🚀\n\n📅 *Data:* ${new Date(booking.date).toLocaleDateString('pt-BR')}\n⏰ *Horário:* ${time.slice(0, 5)}\n📍 *Local:* ${booking.address}\n\nQualquer dúvida, estamos à disposição!`;
 
-    // 1. Send WhatsApp (respecting preferences and extra numbers)
-    await sendClientWhatsApp(booking.client_id, clientPhone, message);
+    // Fetch Client for preferences
+    const client = await getClientById(booking.client_id);
+    const prefs = client?.notificationPreferences || { whatsapp: true, email: true, promotions: false };
+
+    // 1. Send WhatsApp (Using interactive buttons)
+    if (prefs.whatsapp) {
+        // Main Phone (passed as arg usually matches client.phone or booking.client_phone)
+        await sendBookingConfirmation(booking, clientPhone);
+
+        // Extra Notification Numbers
+        if (client?.whatsappNotification1) {
+            await sendBookingConfirmation(booking, client.whatsappNotification1);
+        }
+        if (client?.whatsappNotification2) {
+            await sendBookingConfirmation(booking, client.whatsappNotification2);
+        }
+    }
 
     // 2. Send Email (respecting preferences)
-    const client = await getClientById(booking.client_id);
     if (client) {
         await sendClientEmail(
             client,

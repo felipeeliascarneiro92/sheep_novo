@@ -54,7 +54,6 @@ export const bookingToDb = (booking: Booking) => {
         dropbox_folder_id: booking.dropboxFolderId,
         google_drive_folder_link: booking.dropboxFolderLink, // Map to DB column
         dropbox_upload_link: booking.dropboxUploadLink,
-        pending_services: booking.pending_services,
         history: booking.history,
         created_at: booking.createdAt
     };
@@ -551,7 +550,19 @@ export const createBooking = async (
 
     const allServices = await getServices();
     const services = allServices.filter(s => serviceIds.includes(s.id));
-    let total = services.reduce((sum, s) => sum + (client.customPrices?.[s.id] ?? s.price), 0);
+    let total = serviceIds.reduce((sum, sId) => {
+        const service = allServices.find(s => s.id === sId);
+        const clientPrice = client.customPrices?.[sId];
+
+        if (clientPrice !== undefined) return sum + clientPrice;
+        if (service) return sum + service.price;
+
+        // Fallbacks for known service IDs if missing from DB
+        if (sId === 'deslocamento') return sum + 40.00;
+        if (sId === 'taxa_flash') return sum + 80.00;
+
+        return sum;
+    }, 0);
 
     // Addons Logic (Hardcoded to match ServiceAddons.tsx)
     if (serviceIds.includes('entrega_express')) total += 49.90;
@@ -809,12 +820,16 @@ export const finalizeDraftBooking = async (
     let total = finalServiceIds.reduce((sum, sId) => {
         const service = allServices.find(s => s.id === sId);
         const customPrice = client?.customPrices?.[sId];
-        if (service) {
-            return sum + (customPrice !== undefined ? customPrice : service.price);
-        }
+
+        if (customPrice !== undefined) return sum + customPrice;
+        if (service) return sum + service.price;
+
         if (sId === 'entrega_express') return sum + 49.90;
         if (sId === 'ceu_azul') return sum + 29.90;
         if (sId === 'seguro_chuva') return sum + 19.90;
+        if (sId === 'deslocamento') return sum + 40.00;
+        if (sId === 'taxa_flash') return sum + 80.00;
+
         return sum;
     }, 0);
 
@@ -1101,7 +1116,7 @@ export const uploadMaterialForBooking = async (id: string, fileNames: string[]) 
             // Verify if dropbox link exists, if not, use a fallback call-to-action or wait for it
             // For now, we assume the link is in booking.dropboxFolderLink or booking.media_files
             import('./emailService').then(({ sendPhotoDelivery }) => {
-                sendPhotoDelivery(booking, client).catch(err => console.error('❌ Failed to send delivery email:', err));
+                sendPhotoDelivery(booking, client, booking.dropboxFolderLink || '').catch(err => console.error('❌ Failed to send delivery email:', err));
             });
         }
     }

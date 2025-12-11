@@ -1,19 +1,35 @@
-
 import { Booking } from '../types';
 
 // --- CONFIGURAÇÃO Z-API ---
 // Para ativar o envio real, substitua as strings abaixo pelas suas credenciais do Z-API.
 // DICA DE SEGURANÇA: Em produção, use variáveis de ambiente (ex: process.env.ZAPI_INSTANCE_ID)
-const ZAPI_INSTANCE_ID = ''; // Ex: '3900F07665...'
-const ZAPI_TOKEN = '';       // Ex: '460D6C220...'
+const ZAPI_INSTANCE_ID = '3C9B5DDA9DFC508BDCD0D604DAF2BCF1';
+const ZAPI_TOKEN = 'E4CFB5D4FB0A368932B217CC';
+const ZAPI_CLIENT_TOKEN = 'F783bd8037b984076953132db525cab81S';
 
 // Helper to sanitize phone numbers for Z-API (55 + DDD + Number)
 export const formatPhoneForZApi = (phone: string): string => {
-    const cleaned = phone.replace(/\D/g, '');
-    // Assume BR if no country code
-    if (cleaned.length <= 11) {
+    let cleaned = phone.replace(/\D/g, '');
+
+    // Check if it already has 55 (DDI Brazil) at the start
+    // A standard mobile number with DDI is 13 digits (55 + 2 digit DDD + 9 digit number)
+    // A standard landline with DDI is 12 digits (55 + 2 digit DDD + 8 digit number)
+
+    // If it's a raw local number (e.g. 11999999999 - 11 digits)
+    if (cleaned.length === 11 || cleaned.length === 10) {
         return `55${cleaned}`;
     }
+
+    // If it seems to already have DDI (e.g. 5511999999999)
+    if (cleaned.startsWith('55') && (cleaned.length === 13 || cleaned.length === 12)) {
+        return cleaned;
+    }
+
+    // Fallback/Safety: If it's short, just add 55, otherwise return as is (might be international)
+    if (cleaned.length < 12 && !cleaned.startsWith('55')) {
+        return `55${cleaned}`;
+    }
+
     return cleaned;
 };
 
@@ -29,7 +45,10 @@ const sendZApiMessage = async (phone: string, message: string): Promise<boolean>
             const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Client-Token': ZAPI_CLIENT_TOKEN
+                },
                 body: JSON.stringify({ phone: formattedPhone, message: message })
             });
             if (!response.ok) { console.error('Erro Z-API:', await response.text()); return false; }
@@ -60,7 +79,10 @@ const sendZApiLinkButton = async (phone: string, message: string, buttonLabel: s
             const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-link-button`;
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Client-Token': ZAPI_CLIENT_TOKEN
+                },
                 body: JSON.stringify({
                     phone: formattedPhone,
                     message: message,
@@ -91,25 +113,77 @@ const sendZApiLinkButton = async (phone: string, message: string, buttonLabel: s
 
 // --- TEMPLATES ---
 
-export const sendBookingConfirmation = async (booking: Booking) => {
+// 3. Action Button Message (Interactive)
+// Documentation: https://developer.z-api.io/message/send-button-actions
+// 3. Action Button Message (Interactive)
+// Documentation: https://developer.z-api.io/message/send-button-actions
+const sendZApiButtonActions = async (phone: string, message: string, title: string, buttons: { id: string, label: string, type: 'REPLY' | 'URL' | 'CALL', url?: string, phoneNumber?: string }[]): Promise<boolean> => {
+    const formattedPhone = formatPhoneForZApi(phone);
+
+    if (ZAPI_INSTANCE_ID && ZAPI_TOKEN) {
+        try {
+            console.log(`🚀 [Z-API REAL] Enviando Ações de Botão para ${formattedPhone}...`);
+            const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-button-actions`;
+
+            const buttonActions = buttons.map(b => {
+                if (b.type === 'URL') {
+                    return { id: b.id, type: 'URL', url: b.url, label: b.label };
+                } else if (b.type === 'CALL') {
+                    return { id: b.id, type: 'CALL', phoneNumber: b.phoneNumber, label: b.label };
+                } else {
+                    return { id: b.id, type: 'REPLY', label: b.label };
+                }
+            });
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Client-Token': ZAPI_CLIENT_TOKEN
+                },
+                body: JSON.stringify({
+                    phone: formattedPhone,
+                    message: message,
+                    title: title,
+                    footer: "Escolha uma opção abaixo:",
+                    buttonActions: buttonActions
+                })
+            });
+            if (!response.ok) { console.error('Erro Z-API ({Action Buttons):', await response.text()); return false; }
+            return true;
+        } catch (error) {
+            console.error('Falha na requisição Z-API:', error);
+            return false;
+        }
+    }
+
+    // Simulation Mode
+    console.group('📲 [Z-API SIMULATION] Enviando Ações de Botão...');
+    console.log('Para:', formattedPhone);
+    console.log('Título:', title);
+    console.log('Msg:', message);
+    buttons.forEach(b => console.log(`🔘 [AÇÃO - ${b.type}]: ${b.label} ${b.url ? `(Link: ${b.url})` : ''}`));
+    console.groupEnd();
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return true;
+};
+
+export const sendBookingConfirmation = async (booking: Booking, targetPhone?: string) => {
     const date = new Date(booking.date.replace(/-/g, '/')).toLocaleDateString('pt-BR');
+    const phone = targetPhone || booking.client_phone;
+
     const message = `Olá *${booking.client_name}*! 👋
 Seu agendamento foi confirmado com sucesso!
 
 📝 *Resumo:*
 📅 ${date} às ${booking.start_time}
 📍 ${booking.address}
+📸 Fotógrafo: ${booking.photographer_name || 'A definir'}
 
-Acesse o painel para ver detalhes completos.`;
+Acesse o link abaixo para gerenciar seu agendamento, ver fotos ou cancelar:
+https://sheephouse.com/app/booking/${booking.id}`;
 
-    // Using Link Button to direct back to App
-    return sendZApiLinkButton(
-        booking.client_phone,
-        message,
-        "Ver no Painel",
-        `https://sheephouse.com/app/booking/${booking.id}`,
-        "Confirmação Agendamento"
-    );
+    return sendZApiMessage(phone, message);
 };
 
 export const sendRescheduleNotification = async (booking: Booking) => {
@@ -160,19 +234,26 @@ Clique abaixo para baixar em alta resolução.`;
     );
 };
 
-export const sendInvoiceNotification = async (clientName: string, clientPhone: string, month: string, amount: number, link: string) => {
-    const message = `Olá *${clientName}*!
+export const sendInvoiceNotification = async (clientName: string, clientPhone: string, month: string, amount: number, invoiceUrl: string, bankSlipUrl: string) => {
+    const message = `Olá *${clientName}*! 📄
+    
+Sua fatura de *${month}* está fechada.
+💰 Valor Total: *R$ ${amount.toFixed(2)}*
 
-Sua fatura de *${month}* fechou.
-Valor Total: R$ ${amount.toFixed(2)}
+Este link contém o relatório detalhado dos serviços realizados e as opções de pagamento.
 
-Evite bloqueios, clique abaixo para pagar.`;
+Não deixe para a última hora! 😉`;
+
+    // Priority: Invoice URL (Web View with Report) -> Bank Slip (PDF/Direct)
+    const linkToSend = invoiceUrl || bankSlipUrl;
+
+    if (!linkToSend) return false;
 
     return sendZApiLinkButton(
         clientPhone,
         message,
-        "Visualizar Fatura",
-        link,
+        "📄 Ver Fatura e Relatório",
+        linkToSend,
         "Financeiro SheepHouse"
     );
 };

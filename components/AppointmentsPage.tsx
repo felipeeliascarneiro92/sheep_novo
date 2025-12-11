@@ -6,7 +6,8 @@ import {
     getAllBookings, getBookingsForClient, getBookingsForPhotographer, getBookingsPaginated,
     getServiceById, getPhotographers, getServices,
     updateBookingStatus, rescheduleBooking, getClientById,
-    getAvailableSlots, updateBookingServicesAndPrice, getPhotographerPayoutForBooking, getPhotographerById, isSlotFree, getDailySlotsForPhotographer, deliverAndCompleteBooking, getClients, uploadMaterialForBooking, updateBookingFull
+    getAvailableSlots, updateBookingServicesAndPrice, getPhotographerPayoutForBooking, getPhotographerById, isSlotFree, getDailySlotsForPhotographer, deliverAndCompleteBooking, getClients, uploadMaterialForBooking, updateBookingFull,
+    getCancellationServiceId
 } from '../services/bookingService';
 import { Booking, BookingStatus, Photographer, Service, Client } from '../types';
 import { FilterIcon, MapPinIcon, ClockIcon, ListOrderedIcon, CameraIcon, CalendarIcon, SearchIcon, EditIcon, RefreshCwIcon, XCircleIcon, XIcon, DollarSignIcon, UploadIcon, UploadCloudIcon, FileIcon, CheckCircleIcon, ChevronDownIcon, DownloadIcon } from './icons';
@@ -56,9 +57,28 @@ export const CancelModal: React.FC<{
 
     const actor = user.role === 'admin' ? 'Admin' : 'Cliente';
 
+    const [penaltyType, setPenaltyType] = useState<'NONE' | '50' | '100'>('NONE');
+
+    useEffect(() => {
+        if (booking.date && booking.start_time) {
+            const bookingDateTime = new Date(`${booking.date}T${booking.start_time}`);
+            const now = new Date();
+            const diffMs = bookingDateTime.getTime() - now.getTime();
+            const diffHours = diffMs / (1000 * 60 * 60);
+
+            if (diffHours > 3) {
+                setPenaltyType('NONE');
+            } else if (diffHours > 0.5) {
+                setPenaltyType('50');
+            } else {
+                setPenaltyType('100');
+            }
+        }
+    }, [booking]);
+
     const handleReasonSelect = (id: string) => {
         setSelectedReasonId(id);
-        // Se o motivo for clima, mostramos a oferta de retenção antes de deixar cancelar
+        // Se o motivo for clima, mostramos a oferta de retenção antes de deixar cancelar (APENAS se não for cancelamento automático com multa 100% que ignora isso? Não, vamos manter a logica de retenção)
         if (id === 'weather') {
             setShowRetentionOffer(true);
         } else {
@@ -80,6 +100,35 @@ export const CancelModal: React.FC<{
             finalReason = `[CLIMA] ${finalReason} `;
         }
 
+        // --- PENALTY LOGIC ---
+        // Aplicar regras de multa antes de cancelar
+        try {
+            if (penaltyType !== 'NONE') {
+                const percentage = penaltyType === '50' ? 50 : 100;
+                const penaltyServiceId = await getCancellationServiceId(percentage);
+                if (penaltyServiceId) {
+                    const originalTotal = booking.total_price || 0;
+                    const penaltyAmount = percentage === 50 ? originalTotal * 0.5 : originalTotal;
+
+                    // Replace services with the penalty service and override price
+                    await updateBookingServicesAndPrice(
+                        booking.id,
+                        [penaltyServiceId],
+                        actor,
+                        { [penaltyServiceId]: penaltyAmount }
+                    );
+
+                    finalReason += ` | Multa de ${percentage}% aplicada (R$ ${penaltyAmount.toFixed(2)}) devido ao prazo.`;
+                }
+            } else {
+                // Remove all services (Total = 0)
+                await updateBookingServicesAndPrice(booking.id, [], actor, {});
+                finalReason += ` | Cancelamento sem custo (prazo atendido).`;
+            }
+        } catch (e) {
+            console.error("Erro ao aplicar regras de cancelamento:", e);
+        }
+
         // OPTIMISTIC UPDATE: Update UI immediately
         if (onOptimisticUpdate) {
             onOptimisticUpdate(booking.id, 'Cancelado');
@@ -94,6 +143,8 @@ export const CancelModal: React.FC<{
             getClientById(booking.client_id).then(client => {
                 if (client) {
                     console.log('📧 Sending cancellation email to:', client.email);
+                    // Refetch booking to get updated price/services? Or rely on what we have?
+                    // Ideally we should send the updated booking but standard obj is ok for notification text
                     sendBookingCancellation(booking, client).catch(err => console.error('❌ Failed to send cancellation email:', err));
                 } else {
                     console.warn('⚠️ Could not find client to send cancellation email', booking.client_id);
@@ -213,6 +264,25 @@ export const CancelModal: React.FC<{
                             placeholder="Conte-nos mais detalhes..."
                             autoFocus
                         />
+                    )}
+                </div>
+
+                {/* PENALTY WARNING FOOTER */}
+                <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-center">
+                    {penaltyType === 'NONE' && (
+                        <p className="text-xs text-green-600 dark:text-green-400 font-bold">
+                            ✅ Cancelamento dentro do prazo. Sem custos.
+                        </p>
+                    )}
+                    {penaltyType === '50' && (
+                        <p className="text-xs text-orange-600 dark:text-orange-400 font-bold">
+                            ⚠️ Cancelamento tardio (menos de 3h). Multa de 50% será aplicada.
+                        </p>
+                    )}
+                    {penaltyType === '100' && (
+                        <p className="text-xs text-red-600 dark:text-red-400 font-bold">
+                            🚨 Cancelamento em cima da hora (menos de 30min). Cobrança integral (100%).
+                        </p>
                     )}
                 </div>
 

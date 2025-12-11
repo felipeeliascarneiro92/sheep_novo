@@ -33,6 +33,19 @@ export const getServiceById = async (id: string): Promise<Service | undefined> =
     return serviceFromDb(data);
 };
 
+export const getCancellationServiceId = async (percentage: 50 | 100): Promise<string | null> => {
+    // Try to find by name pattern "Cancelamento 50%" or similar
+    const { data, error } = await supabase
+        .from('services')
+        .select('id')
+        .ilike('name', `%cancelamento%${percentage}%`)
+        .limit(1)
+        .maybeSingle();
+
+    if (error || !data) return null;
+    return data.id;
+};
+
 export const addService = async (service: Omit<Service, 'id'>): Promise<boolean> => {
     try {
         const newService = { ...service, id: uuidv4() };

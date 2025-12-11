@@ -17,6 +17,7 @@ import { HistoryActor, PendingService } from '../types';
 import { createBookingFolder } from './storageService';
 import { notifyClientBookingRescheduled, notifyClientBookingCancelled, notifyClientBookingCompleted } from './notificationService';
 import { getClientById } from './clientService';
+import { reportFailure } from './photographerFinanceService';
 
 export const updateBookingObservations = async (id: string, newObservations: string, actor: HistoryActor) => {
     const booking = await getBookingById(id);
@@ -85,6 +86,30 @@ export const completeBooking = async (id: string, internalNotes: string, commonA
         }
 
         booking.history.push({ timestamp: new Date().toISOString(), actor: 'Fotógrafo', notes: 'Sessão realizada' });
+
+        // AUTOMATION: Check for Late Delivery
+        if (booking.photographer_id) {
+            const deadline = new Date(`${booking.date}T23:59:59`);
+            const now = new Date();
+
+            if (now > deadline) {
+                console.log("⚠️ Late delivery detected. Reporting failure...");
+                reportFailure(
+                    booking.id,
+                    booking.photographer_id,
+                    'ATRASO_ENTREGA',
+                    'WARNING',
+                    'Entrega de material realizada após o prazo limite (23:59 do dia do agendamento).',
+                    booking.photographer_id // Self-reported by system enforcement
+                ).catch(err => console.error("Failed to auto-report late delivery:", err));
+
+                booking.history.push({
+                    timestamp: new Date().toISOString(),
+                    actor: 'Sistema',
+                    notes: '⚠️ Atraso na entrega detectado: Falha registrada.'
+                });
+            }
+        }
 
         // AUTOMATION: Create Drive Folder
         try {

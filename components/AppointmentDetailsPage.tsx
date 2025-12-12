@@ -630,7 +630,7 @@ const AppointmentDetailsPage: React.FC<AppointmentDetailsPageProps> = ({ booking
     return (
         <div className="space-y-6 animate-fade-in">
             {isCancelModalOpen && <CancelModal booking={booking} user={user} onConfirm={handleConfirmCancel} onClose={() => setIsCancelModalOpen(false)} onOptimisticUpdate={handleOptimisticUpdate} />}
-            {isRescheduleModalOpen && <RescheduleModal booking={booking} onConfirm={() => { refreshBooking(); setIsRescheduleModalOpen(false); }} onClose={() => setIsRescheduleModalOpen(false)} />}
+            {isRescheduleModalOpen && <RescheduleModal booking={booking} userRole={user.role} onConfirm={() => { refreshBooking(); setIsRescheduleModalOpen(false); }} onClose={() => setIsRescheduleModalOpen(false)} />}
             {isEditServicesModalOpen && <EditServicesModal booking={booking} user={user} onConfirm={() => { refreshBooking(); setIsEditServicesModalOpen(false); }} onClose={() => setIsEditServicesModalOpen(false)} />}
             {isCompleteModalOpen && <CompleteBookingModal commonAreas={commonAreas} services={services} onClose={() => setIsCompleteModalOpen(false)} onConfirm={handleConfirmComplete} />}
 

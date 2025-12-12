@@ -187,7 +187,7 @@ export const isSlotFree = (photographer: Photographer, date: string, time: strin
     return true;
 };
 
-export const getAvailableSlots = async (location: { lat: number, lng: number }, serviceIds: string[], date: string, clientId?: string): Promise<string[]> => {
+export const getAvailableSlots = async (location: { lat: number, lng: number }, serviceIds: string[], date: string, clientId?: string, ignoreLocationRules: boolean = false): Promise<string[]> => {
     const allServices = await getServices();
     const services = allServices.filter(s => serviceIds.includes(s.id));
     const duration = services.reduce((acc, s) => acc + s.duration_minutes, 0);
@@ -238,19 +238,22 @@ export const getAvailableSlots = async (location: { lat: number, lng: number }, 
         const dist = calculateDistanceKm(searchLat, searchLng, p.base_lat, p.base_lng);
         const isWithinRadius = dist <= p.radius_km;
 
+        // GOD MODE: if ignoreLocationRules is set, we bypass the radius check (but keep service check? User asked for location override)
+        // User said "mesmo sabendo que fora da rota".
+        const locationCheck = ignoreLocationRules ? true : isWithinRadius;
+
         console.log(`[DEBUG] Photographer ${p.name}:`, {
             Active: p.is_active,
             HasServices: hasServices,
             Dist: `${dist.toFixed(2)}km`,
             Radius: `${p.radius_km}km`,
-            Included: hasServices && isWithinRadius,
+            Included: hasServices && locationCheck,
             RequiredServices: essentialServices,
-            PhotographerServices: p.services,
-            MissingServices: essentialServices.filter(id => !p.services.includes(id))
+            GodMode: ignoreLocationRules
         });
 
         if (!hasServices) return false;
-        return isWithinRadius;
+        return locationCheck;
     });
 
     if (validPhotographers.length === 0) {
@@ -582,7 +585,8 @@ export const createBooking = async (
     serviceIds: string[], date: string | null, time: string | null, address: string,
     location: { lat: number, lng: number }, isAccompanied: boolean,
     brokerName?: string, notes?: string, clientId?: string, brokerId?: string,
-    forcedStatus?: BookingStatus, isFlash?: boolean, couponCode?: string
+    forcedStatus?: BookingStatus, isFlash?: boolean, couponCode?: string,
+    ignoreLocationRules: boolean = false // GOD MODE FLAG
 ): Promise<Booking | null> => {
     const client = await getClientById(clientId || '');
     if (!client) return null;
@@ -680,14 +684,19 @@ export const createBooking = async (
             }
 
             const dist = calculateDistanceKm(searchLat, searchLng, p.base_lat, p.base_lng);
+
+            // GOD MODE CHECK
+            if (!ignoreLocationRules && dist > p.radius_km) {
+                continue; // Skip if too far AND not in god mode
+            }
+
             const fullP = await getPhotographerById(p.id);
-            if (dist <= p.radius_km && fullP && isSlotFree(fullP, date, time, duration)) {
+            if (fullP && isSlotFree(fullP, date, time, duration)) {
                 // Fetch daily bookings count for load balancing
                 const dailyBookings = fullP.bookings.filter(b => b.date === date && b.status !== 'Cancelado').length;
                 validPhotographers.push({ photographer: fullP, dist, dailyBookings });
             }
         }
-
         if (validPhotographers.length > 0) {
             // SMART BALANCE LOGIC:
             validPhotographers.sort((a, b) => {
@@ -1060,9 +1069,61 @@ export const rescheduleBooking = async (id: string, newDate: string, newTime: st
         const oldDate = booking.date || '';
         const oldTime = booking.start_time || '';
 
+        // Calculate time until booking
+        let appliedCancellationFee = false;
+        let penaltyPercentage: 50 | 100 | null = null;
+
+        if (booking.date && booking.start_time) {
+            const now = new Date();
+            const bookingDateTime = new Date(`${booking.date}T${booking.start_time}`);
+            const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+            // If rescheduling with less than 3 hours notice, apply cancellation fee
+            if (hoursUntilBooking < 3 && hoursUntilBooking > 0) {
+                penaltyPercentage = hoursUntilBooking < 0.5 ? 100 : 50;
+
+                // Get cancellation service
+                const { getCancellationServiceId } = await import('./resourceService');
+                const cancellationServiceId = await getCancellationServiceId(penaltyPercentage);
+
+                if (cancellationServiceId) {
+                    // Fixed penalty amounts
+                    const penaltyAmount = penaltyPercentage === 100 ? 95.00 : 47.50;
+
+                    // Initialize price overrides if needed
+                    if (!booking.servicePriceOverrides) {
+                        booking.servicePriceOverrides = {};
+                    }
+
+                    // ZERO OUT all original services
+                    booking.service_ids.forEach(serviceId => {
+                        booking.servicePriceOverrides![serviceId] = 0;
+                    });
+
+                    // ADD cancellation service
+                    if (!booking.service_ids.includes(cancellationServiceId)) {
+                        booking.service_ids.push(cancellationServiceId);
+                    }
+                    booking.servicePriceOverrides[cancellationServiceId] = penaltyAmount;
+
+                    // Set total to ONLY the cancellation fee
+                    booking.total_price = penaltyAmount;
+
+                    appliedCancellationFee = true;
+
+                    console.log(`⚠️ Reschedule penalty applied: ${penaltyPercentage}% (R$ ${penaltyAmount.toFixed(2)}) - Original services zeroed`);
+                }
+            }
+        }
+
         booking.date = newDate;
         booking.start_time = newTime;
-        booking.history.push({ timestamp: new Date().toISOString(), actor: 'Sistema', notes: `Reagendado para ${newDate} às ${newTime}` });
+
+        const historyNote = appliedCancellationFee && penaltyPercentage
+            ? `Reagendado para ${newDate} às ${newTime} (Serviços cancelados. Taxa de ${penaltyPercentage}% cobrada: R$ ${penaltyPercentage === 100 ? '95.00' : '47.50'})`
+            : `Reagendado para ${newDate} às ${newTime}`;
+
+        booking.history.push({ timestamp: new Date().toISOString(), actor: 'Sistema', notes: historyNote });
         await supabase.from('bookings').update(bookingToDb(booking)).eq('id', id);
 
         // 📧 Send Reschedule Email

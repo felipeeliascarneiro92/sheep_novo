@@ -118,6 +118,7 @@ const AdminBookingPage: React.FC<{ onBookingCreated: () => void; }> = ({ onBooki
     const [selectedBroker, setSelectedBroker] = useState<string>('');
     const [customBrokerName, setCustomBrokerName] = useState('');
     const [unitDetails, setUnitDetails] = useState<string>('');
+    const [godMode, setGodMode] = useState(false); // GOD MODE STATE
 
     const autocompleteInputRef = useRef<HTMLInputElement>(null);
     const autocompleteInstanceRef = useRef<any>(null);
@@ -293,10 +294,11 @@ const AdminBookingPage: React.FC<{ onBookingCreated: () => void; }> = ({ onBooki
         if (!selectedLocation || !isAddressValid) return allPhotographers;
 
         return allPhotographers.filter(p => {
+            if (godMode) return true; // GOD MODE: Bypass radius check
             const dist = calculateDistanceKm(selectedLocation.lat, selectedLocation.lng, p.baseLat!, p.baseLng!);
             return dist <= p.radiusKm;
         });
-    }, [allPhotographers, selectedLocation, isAddressValid]);
+    }, [allPhotographers, selectedLocation, isAddressValid, godMode]);
 
     // GROUP SERVICES
     const servicesByCategory = useMemo(() => {
@@ -359,7 +361,7 @@ const AdminBookingPage: React.FC<{ onBookingCreated: () => void; }> = ({ onBooki
         };
 
         fetchSlots();
-    }, [selectedPhotographerId, selectedDate, totalDuration, isAddressValid]); // Removed step
+    }, [selectedPhotographerId, selectedDate, totalDuration, isAddressValid, godMode]); // Added godMode dependency for safety, though slots don't depend on it directly here (filteredPhotographers does)
 
     const handleConfirmBooking = async () => {
         if (!selectedClient || !selectedPhotographer || !selectedLocation || !selectedSlot) {
@@ -382,7 +384,11 @@ const AdminBookingPage: React.FC<{ onBookingCreated: () => void; }> = ({ onBooki
                 brokerName,
                 unitDetails,
                 selectedClient.id,
-                brokerId
+                brokerId,
+                undefined, // forcedStatus
+                false, // isFlash
+                undefined, // couponCode
+                godMode // FORCE LOCATION (God Mode)
             );
 
             if (booking) {
@@ -689,7 +695,23 @@ const AdminBookingPage: React.FC<{ onBookingCreated: () => void; }> = ({ onBooki
 
                             <div className="space-y-4">
                                 <div>
-                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2"><CameraIcon className="w-4 h-4" /> Fotógrafo</h3>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                                            <CameraIcon className="w-4 h-4" /> Fotógrafo
+                                        </h3>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id="godMode"
+                                                checked={godMode}
+                                                onChange={(e) => setGodMode(e.target.checked)}
+                                                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                                            />
+                                            <label htmlFor="godMode" className="text-xs font-semibold text-purple-700 dark:text-purple-400 cursor-pointer select-none">
+                                                Fora da Rota
+                                            </label>
+                                        </div>
+                                    </div>
 
                                     {/* Photographer Recommendations / List */}
                                     <PhotographerRecommendationList

@@ -7,7 +7,7 @@ import {
     getServiceById, getPhotographers, getServices,
     updateBookingStatus, rescheduleBooking, getClientById,
     getAvailableSlots, updateBookingServicesAndPrice, getPhotographerPayoutForBooking, getPhotographerById, isSlotFree, getDailySlotsForPhotographer, deliverAndCompleteBooking, getClients, uploadMaterialForBooking, updateBookingFull,
-    getCancellationServiceId
+    getCancellationServiceId, calculateDistanceKm, reassignBooking
 } from '../services/bookingService';
 import { Booking, BookingStatus, Photographer, Service, Client } from '../types';
 import { FilterIcon, MapPinIcon, ClockIcon, ListOrderedIcon, CameraIcon, CalendarIcon, SearchIcon, EditIcon, RefreshCwIcon, XCircleIcon, XIcon, DollarSignIcon, UploadIcon, UploadCloudIcon, FileIcon, CheckCircleIcon, ChevronDownIcon, DownloadIcon } from './icons';
@@ -303,51 +303,198 @@ export const CancelModal: React.FC<{
     );
 };
 
-export const RescheduleModal: React.FC<{ booking: Booking, onConfirm: () => void, onClose: () => void }> = ({ booking, onConfirm, onClose }) => {
+export const RescheduleModal: React.FC<{ booking: Booking, onConfirm: () => void, onClose: () => void, userRole?: string }> = ({ booking, onConfirm, onClose, userRole }) => {
     const [selectedDate, setSelectedDate] = useState(booking.date ? new Date(booking.date.replace(/-/g, '/')) : new Date());
     const [slots, setSlots] = useState<string[]>([]);
     const [selectedSlot, setSelectedSlot] = useState('');
+    const [selectedPhotographerId, setSelectedPhotographerId] = useState(booking.photographer_id);
+    const [godMode, setGodMode] = useState(false);
+    const [allPhotographers, setAllPhotographers] = useState<Photographer[]>([]);
+    const [filteredPhotographers, setFilteredPhotographers] = useState<Photographer[]>([]);
 
+    const isClient = userRole === 'client' || userRole === 'broker';
+    const isAdmin = userRole === 'admin' || userRole === 'editor';
+
+    // Load photographers (only for admin/editor)
+    useEffect(() => {
+        if (!isAdmin) return;
+
+        const loadPhotographers = async () => {
+            const photographers = await getPhotographers();
+            setAllPhotographers(photographers.filter(p => p.isActive));
+        };
+        loadPhotographers();
+    }, [isAdmin]);
+
+    // Filter photographers by location (only for admin/editor)
+    useEffect(() => {
+        if (!isAdmin) return;
+
+        if (!booking.lat || !booking.lng) {
+            setFilteredPhotographers(allPhotographers);
+            return;
+        }
+
+        if (godMode) {
+            setFilteredPhotographers(allPhotographers);
+        } else {
+            const filtered = allPhotographers.filter(p => {
+                const dist = calculateDistanceKm(booking.lat, booking.lng, p.baseLat!, p.baseLng!);
+                return dist <= p.radiusKm;
+            });
+            setFilteredPhotographers(filtered);
+        }
+    }, [allPhotographers, godMode, booking, isAdmin]);
+
+    // Fetch slots
     useEffect(() => {
         const fetchSlots = async () => {
             const dateString = selectedDate.toISOString().split('T')[0];
-            const photographer = await getPhotographerById(booking.photographer_id);
-            if (!photographer) {
-                setSlots([]);
-                return;
+
+            if (isClient) {
+                // CLIENT: Show ALL available slots from ALL eligible photographers
+                const availableSlots = await getAvailableSlots(
+                    { lat: booking.lat, lng: booking.lng },
+                    booking.service_ids,
+                    dateString,
+                    booking.client_id
+                );
+                setSlots(availableSlots);
+            } else {
+                // ADMIN/EDITOR: Show slots for specific photographer
+                const photographer = await getPhotographerById(selectedPhotographerId);
+                if (!photographer) {
+                    setSlots([]);
+                    return;
+                }
+
+                const allServices = await getServices();
+                const duration = allServices
+                    .filter(s => booking.service_ids.includes(s.id))
+                    .reduce((total, s) => total + s.duration_minutes, 0);
+
+                const potentialSlots = await getDailySlotsForPhotographer(photographer.id, dateString);
+                const freeSlots = potentialSlots.filter(slot =>
+                    isSlotFree(photographer, dateString, slot, duration, booking.id)
+                );
+
+                setSlots(freeSlots);
             }
 
-            const allServices = await getServices();
-            const getBookingDuration = (serviceIds: string[]): number => {
-                return allServices
-                    .filter(s => serviceIds.includes(s.id))
-                    .reduce((total, s) => total + s.duration_minutes, 0);
-            };
-
-            const duration = getBookingDuration(booking.service_ids);
-            const potentialSlots = await getDailySlotsForPhotographer(photographer.id, dateString);
-
-            const freeSlots = potentialSlots.filter(slot =>
-                isSlotFree(photographer, dateString, slot, duration, booking.id)
-            );
-
-            setSlots(freeSlots);
             setSelectedSlot('');
         };
-        fetchSlots();
-    }, [selectedDate, booking]);
+
+        if (isClient || selectedPhotographerId) {
+            fetchSlots();
+        }
+    }, [selectedDate, selectedPhotographerId, booking, isClient]);
 
     const handleConfirm = async () => {
         if (!selectedSlot) { alert('Por favor, selecione um novo horário.'); return; }
         const dateString = selectedDate.toISOString().split('T')[0];
+
+        // Calculate time until booking
+        if (booking.date && booking.start_time) {
+            const now = new Date();
+            const bookingDateTime = new Date(`${booking.date}T${booking.start_time}`);
+            const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+            if (hoursUntilBooking < 3 && hoursUntilBooking > 0) {
+                // Fixed cancellation fee amounts
+                const penaltyPercentage = hoursUntilBooking < 0.5 ? 100 : 50;
+                const penaltyAmount = penaltyPercentage === 100 ? 95.00 : 47.50;
+
+                const userConfirmed = window.confirm(
+                    `⚠️ ATENÇÃO: Reagendamento em Cima da Hora\n\n` +
+                    `Esta sessão começa em ${hoursUntilBooking.toFixed(1)} horas.\n\n` +
+                    `Reagendar com menos de 3 horas de antecedência está sujeito a taxa de cancelamento:\n\n` +
+                    `• Taxa: Multa Cancelamento (${penaltyPercentage}%)\n` +
+                    `• Valor: R$ ${penaltyAmount.toFixed(2)}\n\n` +
+                    `Esta taxa será ADICIONADA ao valor do agendamento.\n\n` +
+                    `Deseja prosseguir com o reagendamento?`
+                );
+
+                if (!userConfirmed) {
+                    return;
+                }
+            }
+        }
+
+        // If photographer changed (admin only), reassign first
+        if (isAdmin && selectedPhotographerId !== booking.photographer_id) {
+            await reassignBooking(booking.id, selectedPhotographerId);
+        }
+
+        // Then reschedule
         await rescheduleBooking(booking.id, dateString, selectedSlot);
         alert('Agendamento reagendado com sucesso!');
         onConfirm();
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in-fast" onClick={onClose}><div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-lg" onClick={e => e.stopPropagation()}><h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">Reagendar Sessão</h3><div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4"><Calendar selectedDate={selectedDate} onDateChange={setSelectedDate} /><div className="space-y-2"><h4 className="font-semibold text-slate-800 dark:text-slate-200">Horários disponíveis:</h4><div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">{slots.map(s => <button key={s} onClick={() => setSelectedSlot(s)} className={`p-2 rounded-md text-sm font-semibold ${selectedSlot === s ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'} `}>{s}</button>)}</div></div></div>
-            <div className="mt-6 flex gap-3 justify-end"><button onClick={onClose} className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600">Cancelar</button><button onClick={handleConfirm} disabled={!selectedSlot} className="bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50">Confirmar Novo Horário</button></div></div></div>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in-fast" onClick={onClose}>
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Reagendar Sessão</h3>
+
+                {/* Photographer Selection - Only for Admin/Editor */}
+                {isAdmin && (
+                    <div className="mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Fotógrafo</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="godModeReschedule"
+                                    checked={godMode}
+                                    onChange={(e) => setGodMode(e.target.checked)}
+                                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor="godModeReschedule" className="text-xs font-semibold text-purple-700 dark:text-purple-400 cursor-pointer select-none">
+                                    Fora da Rota
+                                </label>
+                            </div>
+                        </div>
+                        <select
+                            value={selectedPhotographerId}
+                            onChange={(e) => setSelectedPhotographerId(e.target.value)}
+                            className="w-full p-2 border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                        >
+                            {filteredPhotographers.map(p => (
+                                <option key={p.id} value={p.id}>
+                                    {p.name} {!godMode && booking.lat && booking.lng ? `(${calculateDistanceKm(booking.lat, booking.lng, p.baseLat!, p.baseLng!).toFixed(1)}km)` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Calendar selectedDate={selectedDate} onDateChange={setSelectedDate} />
+                    <div className="space-y-2">
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-200">Horários disponíveis:</h4>
+                        <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+                            {slots.map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setSelectedSlot(s)}
+                                    className={`p-2 rounded-md text-sm font-semibold ${selectedSlot === s
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                        }`}
+                                >
+                                    {s}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-6 flex gap-3 justify-end">
+                    <button onClick={onClose} className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600">Cancelar</button>
+                    <button onClick={handleConfirm} disabled={!selectedSlot} className="bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50">Confirmar Novo Horário</button>
+                </div>
+            </div>
+        </div>
     );
 };
 
@@ -969,7 +1116,7 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ user, onViewDetails
     return (
         <div className="space-y-8 animate-fade-in">
             {cancellingBooking && <CancelModal booking={cancellingBooking} user={user} onClose={() => setCancellingBooking(null)} onConfirm={() => refreshBookings(true)} onOptimisticUpdate={handleOptimisticUpdate} />}
-            {reschedulingBooking && <RescheduleModal booking={reschedulingBooking} onClose={() => setReschedulingBooking(null)} onConfirm={() => refreshBookings(true)} />}
+            {reschedulingBooking && <RescheduleModal booking={reschedulingBooking} userRole={user.role} onClose={() => setReschedulingBooking(null)} onConfirm={() => refreshBookings(true)} />}
             {editingServicesBooking && <EditServicesModal booking={editingServicesBooking} user={user} onClose={() => setEditingServicesBooking(null)} onConfirm={() => refreshBookings(true)} />}
             {editingBooking && <EditBookingModal booking={editingBooking} user={user} onClose={() => setEditingBooking(null)} onConfirm={() => refreshBookings(true)} />}
 

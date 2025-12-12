@@ -46,6 +46,7 @@ import ModernAuthScreen from './components/ModernAuthScreen';
 import ResetPasswordPage from './components/ResetPasswordPage';
 import EditorDashboardPage from './components/EditorDashboardPage';
 import { ManageNetworks } from './components/ManageNetworks';
+import { MagicLoginConfirmPage } from './components/MagicLoginConfirmPage';
 
 
 // Icons
@@ -756,6 +757,11 @@ const MainContent: React.FC = () => {
     // PUBLIC ROUTE: Reset Password
     if (window.location.hash.includes('type=recovery')) {
         return <ResetPasswordPage />;
+    }
+
+    // PUBLIC ROUTE: Magic Link Confirmation (Security Check)
+    if (window.location.hash.includes('confirm-login') || window.location.pathname.includes('confirm-login')) {
+        return <MagicLoginConfirmPage />;
     }
 
     if (!user) {

@@ -6,82 +6,61 @@ import type { User } from '../App';
 
 export const getUserProfile = async (userId: string, userEmail?: string): Promise<User | null> => {
     try {
-        // 1. Check Admin
-        console.log('🔍 [authService] Procurando em admins...');
-        let { data: admin } = await supabase.from('admins').select('*').eq('id', userId).maybeSingle();
-        if (!admin && userEmail) {
-            const { data: adminByEmail } = await supabase.from('admins').select('*').eq('email', userEmail).maybeSingle();
-            admin = adminByEmail;
-        }
-        if (admin) {
-            console.log('✅ [authService] Encontrado como ADMIN:', admin.name);
-            return { role: 'admin', id: admin.id, name: admin.name, profilePicUrl: admin.profile_pic_url };
-        }
+        console.log(`🔍 [authService] Buscando perfil para ID: ${userId} (${userEmail})`);
 
-        // 2. Check Editor
-        console.log('🔍 [authService] Procurando em editors...');
-        let { data: editor } = await supabase.from('editors').select('*').eq('id', userId).maybeSingle();
-        if (!editor && userEmail) {
-            const { data: editorByEmail } = await supabase.from('editors').select('*').eq('email', userEmail).maybeSingle();
-            editor = editorByEmail;
-        }
-        if (editor) {
-            console.log('✅ [authService] Encontrado como EDITOR:', editor.name);
-            return { role: 'editor', id: editor.id, name: editor.name, profilePicUrl: editor.profile_pic_url };
-        }
+        // Helper to query a table
+        const checkTable = async (table: string, role: string) => {
+            let query = supabase.from(table).select('*').eq('id', userId).maybeSingle();
+            const { data: byId, error: errId } = await query;
 
-        // 3. Check Clients
-        console.log('🔍 [authService] Procurando em clients...');
-        let { data: client } = await supabase.from('clients').select('*').eq('id', userId).maybeSingle();
-        if (!client && userEmail) {
-            console.log('🔍 [authService] Não encontrado por ID, tentando por email...');
-            const { data: clientByEmail } = await supabase.from('clients').select('*').eq('email', userEmail).maybeSingle();
-            client = clientByEmail;
-            if (clientByEmail) {
-                console.log('✅ [authService] Encontrado por email:', clientByEmail);
+            if (byId) return { ...byId, role };
+
+            if (userEmail && !errId) {
+                const { data: byEmail } = await supabase.from(table).select('*').eq('email', userEmail).maybeSingle();
+                if (byEmail) return { ...byEmail, role };
             }
-        }
-        if (client) {
-            console.log('✅ [authService] Encontrado como CLIENT:', client.name);
-            return { role: 'client', id: client.id, name: client.name, profilePicUrl: client.profile_pic_url || undefined };
-        }
+            return null;
+        };
 
-        // 4. Check Photographers
-        console.log('🔍 [authService] Procurando em photographers...');
-        let { data: photographer } = await supabase.from('photographers').select('*').eq('id', userId).maybeSingle();
-        if (!photographer && userEmail) {
-            const { data: photographerByEmail } = await supabase.from('photographers').select('*').eq('email', userEmail).maybeSingle();
-            photographer = photographerByEmail;
-        }
-        if (photographer) {
-            console.log('✅ [authService] Encontrado como PHOTOGRAPHER:', photographer.name);
-            return { role: 'photographer', id: photographer.id, name: photographer.name, profilePicUrl: photographer.profile_pic_url };
-        }
+        // Run all checks in parallel for speed
+        const results = await Promise.all([
+            checkTable('admins', 'admin'),
+            checkTable('editors', 'editor'),
+            checkTable('clients', 'client'),
+            checkTable('photographers', 'photographer'),
+            checkTable('brokers', 'broker')
+        ]);
 
-        // 5. Check Brokers
-        console.log('🔍 [authService] Procurando em brokers...');
-        let { data: broker } = await supabase.from('brokers').select('*').eq('id', userId).maybeSingle();
-        if (!broker && userEmail) {
-            const { data: brokerByEmail } = await supabase.from('brokers').select('*').eq('email', userEmail).maybeSingle();
-            broker = brokerByEmail;
-        }
-        if (broker) {
-            console.log('✅ [authService] Encontrado como BROKER:', broker.name);
+        // Find the first non-null result
+        const found = results.find(r => r !== null);
+
+        if (found) {
+            console.log(`✅ [authService] Perfil encontrado na tabela '${found.role}s':`, found.name);
+
+            if (found.role === 'broker') {
+                return {
+                    role: 'broker',
+                    id: found.id,
+                    clientId: found.client_id,
+                    name: found.name,
+                    profilePicUrl: found.profile_pic_url,
+                    permissions: found.permissions
+                };
+            }
+
             return {
-                role: 'broker',
-                id: broker.id,
-                clientId: broker.client_id,
-                name: broker.name,
-                profilePicUrl: broker.profile_pic_url,
-                permissions: broker.permissions
+                role: found.role as any,
+                id: found.id,
+                name: found.name,
+                profilePicUrl: found.profile_pic_url || undefined
             };
         }
 
-        console.warn('⚠️ [authService] Usuário autenticado no Auth mas não encontrado em nenhuma tabela!');
-        console.warn('⚠️ [authService] User ID:', userId, 'Email:', userEmail);
+        console.warn('⚠️ [authService] Usuário autenticado mas sem perfil nas tabelas.');
         return null;
+
     } catch (error) {
-        console.error("❌ [authService] Error getting user profile:", error);
+        console.error("❌ [authService] Erro fatal buscando perfil:", error);
         return null;
     }
 };

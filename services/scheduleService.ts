@@ -522,8 +522,25 @@ const calculatePayout = (serviceIds: string[], client: Client, photographer: Pho
     for (const serviceId of serviceIds) {
         // Pass-through services: Photographer gets exactly what the client pays
         if (serviceId === 'deslocamento' || serviceId === 'retirar_chaves') {
-            const clientPrice = client.customPrices?.[serviceId] ?? allServices.find(s => s.id === serviceId)?.price ?? 0;
+            let clientPrice = client.customPrices?.[serviceId] ?? allServices.find(s => s.id === serviceId)?.price;
+
+            // Fallback if price not found
+            if (clientPrice === undefined) {
+                if (serviceId === 'deslocamento') clientPrice = 40.00;
+                // retirar_chaves usually has a price in DB, but we default to 0 if missing
+                else clientPrice = 0;
+            }
+
             payout += clientPrice;
+        } else if (serviceId === 'taxa_flash') {
+            // Specific logic for taxa_flash if needed, otherwise treat as pass-through or standard?
+            // Assuming it acts like displacement (pass-through) or has a fixed cost? 
+            // In createBooking fallback it is 80.00. 
+            // If it's a pass-through to photographer:
+            let price = client.customPrices?.[serviceId] ?? allServices.find(s => s.id === serviceId)?.price;
+            if (price === undefined) price = 80.00;
+            payout += price;
+
         } else {
             // Standard services: Use photographer's defined price, or fallback to 60% of standard price
             const photographerPrice = photographer.prices?.[serviceId];
@@ -537,6 +554,28 @@ const calculatePayout = (serviceIds: string[], client: Client, photographer: Pho
         }
     }
     return payout;
+};
+
+export const reassignBooking = async (bookingId: string, newPhotographerId: string) => {
+    const booking = await getBookingById(bookingId);
+    if (booking) {
+        booking.photographer_id = newPhotographerId;
+
+        // Recalculate Payout
+        const client = await getClientById(booking.client_id);
+        const photographer = await getPhotographerById(newPhotographerId);
+        const allServices = await getServices();
+
+        if (client && photographer) {
+            booking.photographerPayout = calculatePayout(booking.service_ids, client, photographer, allServices);
+        }
+
+        booking.history.push({ timestamp: new Date().toISOString(), actor: 'Admin', notes: `Fotógrafo alterado para ${newPhotographerId}` });
+        await supabase.from('bookings').update(bookingToDb(booking)).eq('id', bookingId);
+
+        // Notify new photographer
+        notifyPhotographerNewBooking(booking, newPhotographerId);
+    }
 };
 
 export const createBooking = async (
@@ -1165,17 +1204,7 @@ export const updateKeyStatus = async (bookingId: string, status: 'WITH_PHOTOGRAP
     }
 };
 
-export const reassignBooking = async (bookingId: string, newPhotographerId: string) => {
-    const booking = await getBookingById(bookingId);
-    if (booking) {
-        booking.photographer_id = newPhotographerId;
-        booking.history.push({ timestamp: new Date().toISOString(), actor: 'Admin', notes: `Fotógrafo alterado para ${newPhotographerId}` });
-        await supabase.from('bookings').update(bookingToDb(booking)).eq('id', bookingId);
 
-        // Notify new photographer
-        notifyPhotographerNewBooking(booking, newPhotographerId);
-    }
-};
 
 export const getContextualUpsells = async (booking: Booking): Promise<Service[]> => {
     const services = await getServices();

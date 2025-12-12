@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../App';
-import { authenticateUser, getUserById } from '../services/authService';
+import { authenticateUser, getUserById, getUserProfile } from '../services/authService';
 import { supabase } from '../services/supabase';
 
 
@@ -24,8 +24,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Check localStorage for existing session
-        // Check localStorage or sessionStorage for existing session
+        // 1. Initial Local Storage Check (Legacy/Fallback)
         const savedUser = localStorage.getItem('sheep_user') || sessionStorage.getItem('sheep_user');
         const savedOriginalUser = localStorage.getItem('sheep_original_user');
 
@@ -47,7 +46,51 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }
 
-        setIsLoading(false);
+        // 2. Supabase Auth Listener (Magic Links & OAuth)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('🔔 [AuthContext] Auth State Change:', event);
+
+            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                if (session?.user) {
+                    // Check if we already have the correct user loaded to avoid unnecessary fetches
+                    if (user && user.id === session.user.id) {
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    console.log('✨ [AuthContext] Valid Supabase Session detected. Fetching profile...');
+                    try {
+                        const profile = await getUserProfile(session.user.id, session.user.email);
+                        if (profile) {
+                            console.log('✅ [AuthContext] Profile loaded:', profile.name);
+                            setUser(profile);
+                            localStorage.setItem('sheep_user', JSON.stringify(profile));
+                        } else {
+                            console.warn('⚠️ [AuthContext] Supabase User logged in, but no App Profile found.');
+                            // Optional: Logout if no profile found? Or let them register?
+                            // supabase.auth.signOut(); 
+                        }
+                    } catch (err) {
+                        console.error('❌ [AuthContext] Error fetching profile from session:', err);
+                    }
+                }
+            } else if (event === 'SIGNED_OUT') {
+                setUser(null);
+                setOriginalUser(null);
+                localStorage.removeItem('sheep_user');
+                localStorage.removeItem('sheep_original_user');
+                sessionStorage.removeItem('sheep_user');
+            }
+
+            setIsLoading(false);
+        });
+
+        // If no session handling happens quickly, ensure loading stops
+        setTimeout(() => setIsLoading(false), 2000);
+
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
     const login = async (email: string, password: string, rememberMe: boolean = true): Promise<boolean> => {

@@ -2,24 +2,10 @@ import { supabase } from './supabase';
 import type { User } from '../App';
 
 // --- AUTH HELPER ---
-export const authenticateUser = async (email: string, password: string): Promise<User | null> => {
+// --- AUTH HELPER ---
+
+export const getUserProfile = async (userId: string, userEmail?: string): Promise<User | null> => {
     try {
-        console.log('🔓 [authService] Iniciando autenticação para:', email);
-
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
-
-        if (error || !data.user) {
-            console.error("❌ [authService] Supabase auth error:", error);
-            return null;
-        }
-
-        console.log('✅ [authService] Auth bem-sucedido. User ID:', data.user.id);
-        const userId = data.user.id;
-        const userEmail = data.user.email;
-
         // 1. Check Admin
         console.log('🔍 [authService] Procurando em admins...');
         let { data: admin } = await supabase.from('admins').select('*').eq('id', userId).maybeSingle();
@@ -94,6 +80,29 @@ export const authenticateUser = async (email: string, password: string): Promise
         console.warn('⚠️ [authService] Usuário autenticado no Auth mas não encontrado em nenhuma tabela!');
         console.warn('⚠️ [authService] User ID:', userId, 'Email:', userEmail);
         return null;
+    } catch (error) {
+        console.error("❌ [authService] Error getting user profile:", error);
+        return null;
+    }
+};
+
+export const authenticateUser = async (email: string, password: string): Promise<User | null> => {
+    try {
+        console.log('🔓 [authService] Iniciando autenticação para:', email);
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (error || !data.user) {
+            console.error("❌ [authService] Supabase auth error:", error);
+            return null;
+        }
+
+        console.log('✅ [authService] Auth bem-sucedido. User ID:', data.user.id);
+
+        return await getUserProfile(data.user.id, data.user.email);
     } catch (error) {
         console.error("❌ [authService] Unexpected auth error:", error);
         return null;

@@ -368,7 +368,7 @@ export const EditBookingModal: React.FC<{ booking: Booking, user: User, onConfir
         const loadData = async () => {
             const [c, p] = await Promise.all([getClients(), getPhotographers()]);
             setClients(c);
-            setPhotographers(p);
+            setPhotographers(p.filter(ph => ph.isActive));
         };
         loadData();
     }, []);

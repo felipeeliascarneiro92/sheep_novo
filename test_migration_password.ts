@@ -10,6 +10,7 @@ const ZAPI_TOKEN = 'E4CFB5D4FB0A368932B217CC';
 const ZAPI_CLIENT_TOKEN = 'F783bd8037b984076953132db525cab81S';
 
 const CLIENT_ID = '8ed8e682-9e3b-4810-b633-244ab16724fa'; // Adaiane
+const TEMP_PASSWORD = 'SheepHouse@2025'; // Senha Provisória Forte
 
 // --- HELPERS ---
 const formatPhoneForZApi = (phone: string): string => {
@@ -46,7 +47,7 @@ const sendZApiMessage = async (phone: string, message: string) => {
 
 // --- MAIN ---
 const run = async () => {
-    console.log('--- TESTE REAL V5: PROTEÇÃO ANTI-BOT (CONFIRM LOGIN PAGE) ---');
+    console.log('--- MIGRACAO VIA SENHA (TESTE ADAIANE) ---');
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
         auth: {
@@ -56,55 +57,71 @@ const run = async () => {
     });
 
     // 1. Fetch Client
+    console.log(`🔍 Buscando cliente ID: ${CLIENT_ID}...`);
     const { data: client, error: clientError } = await supabaseAdmin
         .from('clients')
         .select('*')
         .eq('id', CLIENT_ID)
         .single();
 
-    if (clientError || !client) { return; }
-    console.log(`✅ Cliente: ${client.name}`);
-
-    // 2. Generate Magic Link (Standard, pointing to Dashboard)
-    console.log('🔐 Gerando Link Mágico...');
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'magiclink',
-        email: client.email,
-        options: {
-            redirectTo: 'https://sheepnovo.vercel.app/'
-        }
-    });
-
-    if (linkError || !linkData) {
-        console.error('❌ Erro ao gerar link:', linkError);
+    if (clientError || !client) {
+        console.error('❌ Cliente não encontrado na tabela public.clients');
         return;
     }
+    console.log(`✅ Cliente: ${client.name} (${client.email})`);
 
-    const magicLink = linkData.properties.action_link;
-    console.log('🔗 Link Original:', magicLink);
+    // 2. Manage Auth User
+    console.log('🔐 Gerenciando Usuário no Auth...');
 
-    // 3. Create Protected Wrapper Link
-    // Encodes the Magic Link so the bot doesn't click it, but our page can decode and use it.
-    // Hash routing is safer for avoiding server-side 404s on static hosts if needed, but path is cleaner.
-    // Using Hash routing structure as seen in App.tsx routing pattern just in case.
-    const encodedTarget = encodeURIComponent(magicLink);
-    const protectedLink = `https://sheepnovo.vercel.app/#/confirm-login?target=${encodedTarget}`;
+    // Check if user exists
+    const { data: { users }, error: searchError } = await supabaseAdmin.auth.admin.listUsers();
+    const existingUser = users.find(u => u.email === client.email);
 
-    console.log('🛡️ Link Protegido:', protectedLink);
+    if (existingUser) {
+        console.log(`ℹ️ Usuário já existe (ID: ${existingUser.id}). Atualizando senha...`);
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+            existingUser.id,
+            { password: TEMP_PASSWORD, email_confirm: true }
+        );
+        if (updateError) {
+            console.error('❌ Erro ao atualizar senha:', updateError);
+            return;
+        }
+        console.log('✅ Senha atualizada com sucesso.');
+    } else {
+        console.log('🆕 Criando novo usuário...');
+        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+            email: client.email,
+            password: TEMP_PASSWORD,
+            email_confirm: true,
+            user_metadata: { name: client.name, role: 'client' }
+        });
+        if (createError) {
+            console.error('❌ Erro ao criar usuário:', createError);
+            return;
+        }
+        console.log(`✅ Usuário criado com sucesso (ID: ${newUser.user.id}).`);
+    }
 
-    // 3. Send
+    // 3. Send WhatsApp
     const message = `Olá *${client.name.split(' ')[0]}*! 👋
         
-Atualizamos a segurança do login. 🛡️
+Seu acesso ao novo Painel SheepHouse está pronto! 🚀
 
-Para acessar seu painel, clique no link seguro abaixo e confirme que você não é um robô:
+Acesse: https://sheepnovo.vercel.app/
 
-${protectedLink}
+🔑 *Login:* ${client.email}
+🔒 *Senha:* ${TEMP_PASSWORD}
 
-(Este link dura mais tempo e evita erros)`;
+(Recomendamos trocar sua senha no primeiro acesso)`;
 
-    await sendZApiMessage(client.phone, message);
-    console.log('✅ ENVIO V5 CONCLUÍDO.');
+    const success = await sendZApiMessage(client.phone, message);
+
+    if (success) {
+        console.log('✅ CREDENCIAIS ENVIADAS COM SUCESSO!');
+    } else {
+        console.error('❌ Falha no envio do WhatsApp.');
+    }
 };
 
 run();

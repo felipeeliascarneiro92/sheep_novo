@@ -8,30 +8,43 @@ export const getUserProfile = async (userId: string, userEmail?: string): Promis
     try {
         console.log(`🔍 [authService] Buscando perfil para ID: ${userId} (${userEmail})`);
 
-        // Helper to query a table
+        // Helper to query a table with 5s timeout
         const checkTable = async (table: string, role: string) => {
-            let query = supabase.from(table).select('*').eq('id', userId).maybeSingle();
-            const { data: byId, error: errId } = await query;
+            const promise = (async () => {
+                let query = supabase.from(table).select('*').eq('id', userId).maybeSingle();
+                const { data: byId, error: errId } = await query;
 
-            if (byId) return { ...byId, role };
+                if (byId) return { ...byId, role };
 
-            if (userEmail && !errId) {
-                const { data: byEmail } = await supabase.from(table).select('*').eq('email', userEmail).maybeSingle();
-                if (byEmail) return { ...byEmail, role };
-            }
-            return null;
+                if (userEmail && !errId) {
+                    const { data: byEmail } = await supabase.from(table).select('*').eq('email', userEmail).maybeSingle();
+                    if (byEmail) return { ...byEmail, role };
+                }
+                return null;
+            })();
+
+            // 5 second timeout race to prevent hanging
+            const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+            return Promise.race([promise, timeout]);
         };
 
-        // Run all checks in parallel for speed
+        // 1. FAST PATH: Check Clients First (Most common)
+        console.log('🚀 [authService] Verificando Clients primeiro...');
+        const clientProfile = await checkTable('clients', 'client');
+        if (clientProfile) {
+            console.log('✅ [authService] Encontrado como CLIENT (Fast Path):', clientProfile.id);
+            return { role: 'client', id: clientProfile.id, name: clientProfile.name, profilePicUrl: clientProfile.profile_pic_url || undefined };
+        }
+
+        // 2. Slow Path: Check others in parallel
+        console.log('🔄 [authService] Não é cliente. Verificando outros perfis...');
         const results = await Promise.all([
             checkTable('admins', 'admin'),
             checkTable('editors', 'editor'),
-            checkTable('clients', 'client'),
             checkTable('photographers', 'photographer'),
             checkTable('brokers', 'broker')
         ]);
 
-        // Find the first non-null result
         const found = results.find(r => r !== null);
 
         if (found) {

@@ -46,6 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }
 
+        // Force deploy: Magic Link V3 (Ensure this logic is running in production)
         // 2. Supabase Auth Listener (Magic Links & OAuth)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             console.log('🔔 [AuthContext] Auth State Change:', event);
